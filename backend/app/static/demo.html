@@ -909,10 +909,17 @@ const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
 function sampleWaypoints(geometry, count) {
-  if (geometry.length <= count) return geometry.slice(1, -1);
-  const step = Math.floor(geometry.length / (count + 1));
+  // Spread the picks across the whole loop. Stepping by
+  // floor(length / (count + 1)) took the first `count` points instead, because
+  // that step rounds to 1 on a short geometry — so the tail of the loop was
+  // never described and Google was left to invent its own way home.
+  const inner = geometry.slice(1, -1); // first and last are both the start point
+  if (inner.length <= count) return inner;
+
   const picks = [];
-  for (let i = 1; i <= count; i++) picks.push(geometry[i * step]);
+  for (let i = 0; i < count; i++) {
+    picks.push(inner[Math.round((i * (inner.length - 1)) / (count - 1))]);
+  }
   return picks;
 }
 
