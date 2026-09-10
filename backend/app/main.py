@@ -1,5 +1,6 @@
 """FastAPI application entrypoint: app setup, middleware, and router wiring."""
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,10 +17,18 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("fitwaze_backend_startup environment=%s", settings.environment)
+    yield
+
+
 app = FastAPI(
     title="FitWaze API",
     description="PERSON + PLACE = PERSONALIZED PHYSICAL ACTIVITY",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # --- Rate limiting ---
@@ -55,8 +64,3 @@ app.include_router(profile_router.router)
 app.include_router(activity_router.router)
 app.include_router(route_router.router)
 app.include_router(progress_router.router)
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    logger.info("fitwaze_backend_startup environment=%s", settings.environment)
