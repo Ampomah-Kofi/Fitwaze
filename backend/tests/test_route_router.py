@@ -239,3 +239,64 @@ def test_gpx_export_is_scoped_to_the_owner(client):
 def test_gpx_export_requires_authentication(client):
     resp = client.get("/route/sessions/00000000-0000-0000-0000-000000000000/gpx")
     assert resp.status_code == 401
+
+
+def test_unsuitable_routes_are_withheld_with_a_reason(client):
+    """A walker who cannot manage steps is not offered the stair-heavy loops the
+    mock provider generates, and is told why they are missing."""
+    user = register_and_login(client)
+    client.put(
+        "/profile",
+        json=valid_profile_payload(mobility_limitations="severe", walking_ability="limited"),
+        headers=auth_headers(user["access_token"]),
+    )
+    recommendation_id = client.post(
+        "/activity/recommendation", headers=auth_headers(user["access_token"])
+    ).json()["id"]
+
+    body = client.post(
+        "/route/options",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.7128,
+            "longitude": -74.0060,
+        },
+        headers=auth_headers(user["access_token"]),
+    ).json()
+
+    offered = {option["label"] for option in body["options"]}
+    withheld = {item["label"] for item in body["excluded"]}
+    assert withheld, "expected the stair-heavy candidates to be withheld"
+    assert offered.isdisjoint(withheld)
+    for item in body["excluded"]:
+        assert item["reason"]
+
+    # Asking for a withheld route by name must be refused, not quietly honoured.
+    refused = client.post(
+        "/route/select",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.7128,
+            "longitude": -74.0060,
+            "candidate_label": next(iter(withheld)),
+        },
+        headers=auth_headers(user["access_token"]),
+    )
+    assert refused.status_code == 409
+    assert "not offered" in refused.json()["detail"]
+
+
+def test_an_unrestricted_walker_is_offered_everything(client):
+    user = register_and_login(client)
+    recommendation_id = _create_recommendation(client, user["access_token"])
+    body = client.post(
+        "/route/options",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.7128,
+            "longitude": -74.0060,
+        },
+        headers=auth_headers(user["access_token"]),
+    ).json()
+    assert body["excluded"] == []
+    assert len(body["options"]) == 3

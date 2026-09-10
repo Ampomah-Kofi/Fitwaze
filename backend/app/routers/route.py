@@ -22,14 +22,16 @@ from app.config import get_settings
 from app.db import get_db
 from app.engines.route_engine import get_route_provider
 from app.engines.route_engine.base import RawRoute
+from app.engines.route_engine.scoring import RouteSelection
 from app.engines.route_engine.cache import get_candidate_routes_cached
-from app.engines.route_engine.scoring import RouteScoreResult, score_and_rank_routes
+from app.engines.route_engine.scoring import RouteScoreResult, feasibility_problem, select_routes
 from app.models.activity import ActivityRecommendation
 from app.models.enums import SessionStatusEnum
 from app.models.profile import HealthProfile, profile_to_data
 from app.models.session import ActivitySession
 from app.models.user import User
 from app.schemas.route import (
+    ExcludedRouteSchema,
     RouteOptionSchema,
     RouteOptionsRequest,
     RouteOptionsResponse,
@@ -77,7 +79,7 @@ def get_route_options(
         target_duration_min=recommendation.duration_minutes,
     )
 
-    ranked = score_and_rank_routes(
+    selection = select_routes(
         raw_routes,
         recommendation.activity_type,
         recommendation.duration_minutes,
@@ -92,9 +94,10 @@ def get_route_options(
             score=result.score,
             score_breakdown=result.breakdown,
             explanation=result.explanation,
+            unverified=sorted(route.unknown_attributes),
             geometry=route.geometry,
         )
-        for route, result in ranked
+        for route, result in selection.ranked
     ]
 
     logger.info(
@@ -110,6 +113,10 @@ def get_route_options(
         target_duration_minutes=recommendation.duration_minutes,
         provider=get_settings().route_provider.lower(),
         options=options,
+        excluded=[
+            ExcludedRouteSchema(label=item.label, reason=item.reason)
+            for item in selection.excluded
+        ],
     )
 
 
@@ -136,7 +143,7 @@ def _candidates_for(
     payload: RouteSelectRequest,
     recommendation: ActivityRecommendation,
     profile,
-) -> list[tuple[RawRoute, RouteScoreResult]]:
+) -> "RouteSelection":
     raw_routes = get_candidate_routes_cached(
         get_route_provider(),
         start_lat=payload.latitude,
@@ -144,7 +151,7 @@ def _candidates_for(
         activity_type=recommendation.activity_type,
         target_duration_min=recommendation.duration_minutes,
     )
-    return score_and_rank_routes(
+    return select_routes(
         raw_routes,
         recommendation.activity_type,
         recommendation.duration_minutes,
@@ -168,12 +175,24 @@ def select_route(
         db, payload.activity_recommendation_id, current_user.id
     )
 
+    profile = _profile_for(db, current_user.id)
+    selection = _candidates_for(payload, recommendation, profile)
+
+    # A route the gate withheld must not become selectable just because a
+    # client asked for it by name: refuse it, and say why.
+    withheld = next(
+        (item for item in selection.excluded if item.label == payload.candidate_label), None
+    )
+    if withheld is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"That route {withheld.reason}, so it is not offered to you",
+        )
+
     chosen = next(
         (
             (route, result)
-            for route, result in _candidates_for(
-                payload, recommendation, _profile_for(db, current_user.id)
-            )
+            for route, result in selection.ranked
             if route.label == payload.candidate_label
         ),
         None,

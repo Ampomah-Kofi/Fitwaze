@@ -117,6 +117,41 @@ physiotherapist can argue with them. The strongest applicable signal wins rather
 than compounding, and a withheld limitation is treated as a mild one rather than
 as none.
 
+### Is the route actually walkable?
+
+Two separate questions, answered in two places.
+
+**Walkable at all.** With `ROUTE_PROVIDER=ors` this holds by construction: the
+`foot-walking` and `cycling-regular` profiles only route over ways tagged as
+walkable or cyclable, so a candidate never runs down a motorway. With `mock`
+it does not hold at all — that provider draws synthetic geometry and ignores
+streets entirely, which is why the UI labels its output as synthetic.
+
+**Walkable by this person.** Weighting steps more heavily is not enough: a
+stair-ridden route can still come top when the alternatives are worse, and
+"best of a bad set" is the wrong answer when the obstacle is one the walker
+cannot cross. `select_routes()` therefore applies hard limits (`MAX_STAIRS`,
+`MAX_SLOPE`, tightened further by limited ability) and withholds anything over
+them, returning the reason alongside the offers. `POST /route/select` refuses a
+withheld route with a 409, so a client cannot select one by asking for it by
+name.
+
+Worked example from the running API, same start point:
+
+```
+unrestricted walker      offered: out_and_back, large_loop, small_loop
+severe limitation,       offered: out_and_back
+limited walking         withheld: small_loop, large_loop
+                                  "includes steps beyond what you told us you can manage"
+```
+
+**Unknown is not the same as bad.** A provider that cannot measure steps fills
+in a neutral placeholder and declares the attribute in `unknown_attributes`.
+The gate skips those, because excluding routes on the strength of an invented
+number would quietly hide most of the map wherever the data is thin. ORS marks
+every one of its surface attributes this way today, and the UI says which
+details are estimated rather than surveyed.
+
 ### Live tracking
 
 **Start activity** on a selected session switches the map to follow mode: it

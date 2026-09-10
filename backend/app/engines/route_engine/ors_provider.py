@@ -46,6 +46,17 @@ _CYCLE_SPEED_M_PER_MIN = 15000.0 / 60.0
 # Neutral placeholder for attributes ORS doesn't provide out of the box.
 _NEUTRAL_ATTRIBUTE_VALUE = 0.5
 
+# Every attribute below is a placeholder, not a measurement. Declaring them as
+# unknown keeps the feasibility gate from excluding real routes on the strength
+# of an invented number — the routes ORS returns are walkable/cyclable by
+# construction (that is what the foot-walking and cycling-regular profiles
+# mean), we simply cannot yet say how many steps or how steep they are.
+_UNMEASURED = frozenset({
+    "sidewalk_score", "traffic_exposure", "major_crossings", "slope", "stairs",
+    "trail_bonus", "safety_score", "bike_lane_score", "traffic_stress",
+    "intersection_complexity", "continuity_score",
+})
+
 
 class ORSProviderError(RuntimeError):
     """Raised when the ORS API call fails or returns an unexpected shape."""
@@ -124,6 +135,7 @@ class ORSRouteProvider(RouteProvider):
                         traffic_stress=_NEUTRAL_ATTRIBUTE_VALUE,
                         intersection_complexity=_NEUTRAL_ATTRIBUTE_VALUE,
                         continuity_score=_NEUTRAL_ATTRIBUTE_VALUE,
+                        unknown_attributes=_UNMEASURED,
                         raw_attributes={"source": "ors", "profile": profile},
                     )
                 )

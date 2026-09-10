@@ -15,6 +15,7 @@ from app.engines.route_engine.scoring import (
     WALK_WEIGHTS,
     personalised_weights,
     score_and_rank_routes,
+    select_routes,
     score_route,
     terrain_emphasis,
 )
@@ -402,3 +403,86 @@ def test_explanation_never_echoes_a_stored_health_value():
 
 def test_scoring_without_a_profile_uses_the_generic_weights():
     assert personalised_weights(ActivityTypeEnum.walk, None) == WALK_WEIGHTS
+
+
+# --- Feasibility gate ------------------------------------------------------
+
+
+def test_a_stair_heavy_route_is_withheld_from_someone_who_cannot_manage_steps():
+    selection = select_routes(
+        [_stepped_route(), _flat_route()], ActivityTypeEnum.walk, 30,
+        profile=_profile(mobility_limitations="severe"),
+    )
+    assert [r.stairs for r, _ in selection.ranked] == [0.0]
+    assert len(selection.excluded) == 1
+    assert "steps" in selection.excluded[0].reason
+
+
+def test_the_same_route_is_offered_to_someone_unrestricted():
+    selection = select_routes(
+        [_stepped_route(), _flat_route()], ActivityTypeEnum.walk, 30, profile=_profile()
+    )
+    assert len(selection.ranked) == 2
+    assert selection.excluded == []
+
+
+def test_a_steep_route_is_withheld_separately_from_steps():
+    steep_but_step_free = RawRoute(
+        geometry=[(0.0, 0.0)], distance_m=1000.0, estimated_minutes=30, label="steep",
+        sidewalk_score=1.0, slope=0.95, stairs=0.0, safety_score=1.0,
+    )
+    selection = select_routes(
+        [steep_but_step_free], ActivityTypeEnum.walk, 30,
+        profile=_profile(mobility_limitations="moderate"),
+    )
+    assert selection.ranked == []
+    assert "steeper" in selection.excluded[0].reason
+
+
+def test_limited_ability_applies_the_gate_even_without_a_stated_limitation():
+    selection = select_routes(
+        [_stepped_route()], ActivityTypeEnum.walk, 30,
+        profile=_profile(walking_ability="limited"),
+    )
+    assert selection.ranked == []
+    assert selection.excluded
+
+
+def test_unmeasured_attributes_never_cause_an_exclusion():
+    """A provider that cannot measure steps fills in a placeholder. Excluding a
+    route on the strength of an invented number would hide most of the map."""
+    unmeasured = RawRoute(
+        geometry=[(0.0, 0.0)], distance_m=1000.0, estimated_minutes=30, label="unknown",
+        sidewalk_score=0.5, slope=0.5, stairs=0.5, safety_score=0.5,
+        unknown_attributes=frozenset({"stairs", "slope"}),
+    )
+    selection = select_routes(
+        [unmeasured], ActivityTypeEnum.walk, 30,
+        profile=_profile(mobility_limitations="severe"),
+    )
+    assert len(selection.ranked) == 1
+    assert selection.excluded == []
+
+    # ...but the identical numbers DO exclude it once they are real measurements.
+    measured = RawRoute(**{**unmeasured.__dict__, "unknown_attributes": frozenset()})
+    assert select_routes(
+        [measured], ActivityTypeEnum.walk, 30,
+        profile=_profile(mobility_limitations="severe"),
+    ).ranked == []
+
+
+def test_no_profile_means_no_gate():
+    selection = select_routes([_stepped_route()], ActivityTypeEnum.walk, 30, profile=None)
+    assert len(selection.ranked) == 1
+
+
+def test_cycling_gate_reads_cycling_ability_not_walking_ability():
+    stepped = _stepped_route()
+    walker_limited = select_routes(
+        [stepped], ActivityTypeEnum.cycle, 30, profile=_profile(walking_ability="limited")
+    )
+    cyclist_limited = select_routes(
+        [stepped], ActivityTypeEnum.cycle, 30, profile=_profile(cycling_ability="limited")
+    )
+    assert len(walker_limited.ranked) == 1
+    assert cyclist_limited.ranked == []

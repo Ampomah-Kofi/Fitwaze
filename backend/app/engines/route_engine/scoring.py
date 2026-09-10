@@ -66,6 +66,31 @@ LIMITED_ABILITY_EMPHASIS = 1.8
 OLDER_ADULT_AGE = 65
 OLDER_ADULT_EMPHASIS = 1.3
 
+# --- Feasibility -----------------------------------------------------------
+# Emphasis alone is not enough. Weighting steps more heavily still lets a
+# stair-ridden route come top when the alternatives are worse, and "best of a
+# bad set" is the wrong answer when the obstacle is one this person cannot
+# cross. These are hard limits: a route above them is not offered at all.
+MAX_STAIRS: dict[MobilityLimitationEnum, float] = {
+    MobilityLimitationEnum.none: 1.0,
+    MobilityLimitationEnum.mild: 0.60,
+    MobilityLimitationEnum.moderate: 0.30,
+    MobilityLimitationEnum.severe: 0.10,
+    MobilityLimitationEnum.prefer_not_to_say: 0.60,
+}
+
+MAX_SLOPE: dict[MobilityLimitationEnum, float] = {
+    MobilityLimitationEnum.none: 1.0,
+    MobilityLimitationEnum.mild: 0.80,
+    MobilityLimitationEnum.moderate: 0.50,
+    MobilityLimitationEnum.severe: 0.30,
+    MobilityLimitationEnum.prefer_not_to_say: 0.80,
+}
+
+# Someone who reports limited ability for the activity gets at least the
+# moderate limits, whatever they said about mobility limitations generally.
+LIMITED_ABILITY_FLOOR = MobilityLimitationEnum.moderate
+
 _WALK_FACTOR_DESCRIPTIONS = {
     "duration_match": "closely matches your target session length",
     "sidewalk_score": "has good sidewalk coverage",
@@ -281,3 +306,83 @@ def score_and_rank_routes(
     ]
     scored.sort(key=lambda pair: pair[1].score, reverse=True)
     return scored[:top_n]
+
+
+@dataclass
+class ExcludedRoute:
+    label: str
+    reason: str
+
+
+@dataclass
+class RouteSelection:
+    """What the engine is willing to offer this person, and what it held back."""
+
+    ranked: list[tuple[RawRoute, RouteScoreResult]]
+    excluded: list[ExcludedRoute]
+
+
+def _limits_for(profile: "HealthProfileData", activity_type: ActivityTypeEnum) -> tuple[float, float]:
+    limitation = profile.mobility_limitations
+    ability = (
+        profile.walking_ability
+        if activity_type == ActivityTypeEnum.walk
+        else profile.cycling_ability
+    )
+
+    max_stairs = MAX_STAIRS.get(limitation, 1.0)
+    max_slope = MAX_SLOPE.get(limitation, 1.0)
+    if ability == AbilityEnum.limited:
+        max_stairs = min(max_stairs, MAX_STAIRS[LIMITED_ABILITY_FLOOR])
+        max_slope = min(max_slope, MAX_SLOPE[LIMITED_ABILITY_FLOOR])
+    return max_stairs, max_slope
+
+
+def feasibility_problem(
+    route: RawRoute, activity_type: ActivityTypeEnum, profile: "HealthProfileData | None"
+) -> str | None:
+    """Why this route should not be offered to this person, or None if it is fine.
+
+    Attributes the provider could not measure are never grounds for exclusion:
+    withholding a route because of a placeholder value would quietly hide most
+    of the map whenever the data is thin.
+    """
+    if profile is None:
+        return None
+
+    max_stairs, max_slope = _limits_for(profile, activity_type)
+
+    if "stairs" not in route.unknown_attributes and route.stairs > max_stairs:
+        return "includes steps beyond what you told us you can manage"
+    if "slope" not in route.unknown_attributes and route.slope > max_slope:
+        return "is steeper than suits you"
+    return None
+
+
+def select_routes(
+    routes: list[RawRoute],
+    activity_type: ActivityTypeEnum,
+    target_duration_min: float,
+    profile: "HealthProfileData | None" = None,
+    top_n: int = 3,
+) -> RouteSelection:
+    """Score, rank, and withhold anything this person should not be sent along.
+
+    Returning the reasons rather than silently dropping routes matters: a user
+    who can see three loops on the map and is offered two deserves to know why,
+    and a researcher reading the output needs to see what was filtered.
+    """
+    offerable: list[RawRoute] = []
+    excluded: list[ExcludedRoute] = []
+
+    for route in routes:
+        problem = feasibility_problem(route, activity_type, profile)
+        if problem is None:
+            offerable.append(route)
+        else:
+            excluded.append(ExcludedRoute(label=route.label, reason=problem))
+
+    ranked = score_and_rank_routes(
+        offerable, activity_type, target_duration_min, top_n, profile
+    )
+    return RouteSelection(ranked=ranked, excluded=excluded)

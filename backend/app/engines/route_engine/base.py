@@ -45,6 +45,12 @@ class RawRoute:
     intersection_complexity: float = 0.0
     continuity_score: float = 0.0
 
+    # Attributes this provider could not actually measure and has filled with a
+    # neutral placeholder. Scoring still uses the placeholder value, but the
+    # feasibility gate must never exclude a route on the strength of a number
+    # nobody measured — "unknown" is not the same as "bad".
+    unknown_attributes: frozenset[str] = frozenset()
+
     raw_attributes: dict = field(default_factory=dict)
 
 

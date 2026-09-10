@@ -654,11 +654,26 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
 
     const isReal = data.provider === "ors";
     const banner = isReal
-      ? '<div class="banner real">Real routes from OpenStreetMap data.</div>'
+      ? '<div class="banner real">Real walkable and cyclable routes from OpenStreetMap data.</div>'
       : '<div class="banner mock">Synthetic demo routes (ROUTE_PROVIDER=mock) — shaped like ' +
         "real ones, but not following actual streets.</div>";
 
-    el("options-out").innerHTML = banner + data.options.map((option, index) =>
+    // Routes the engine withheld as unsuitable, with the reason. Saying this
+    // out loud is the point: a silent filter looks like a bug or a short list.
+    const withheld = (data.excluded || []).length
+      ? '<div class="banner mock">' +
+        data.excluded.map((item) =>
+          "<b>" + esc(item.label.replace(/_/g, " ")) + "</b> is not shown: it " + esc(item.reason) + "."
+        ).join("<br />") +
+        "</div>"
+      : "";
+
+    const unverified = data.options.some((option) => (option.unverified || []).length)
+      ? '<p class="note">Some surface details (steps, gradient, pavements) are not ' +
+        "available from this route provider, so they are estimated rather than surveyed.</p>"
+      : "";
+
+    el("options-out").innerHTML = banner + withheld + unverified + data.options.map((option, index) =>
       '<div class="option" style="border-left-color:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '">' +
       '<div class="top"><span class="name">' + esc(option.label.replace(/_/g, " ")) + "</span>" +
       '<span class="score">' + esc(option.score) + "</span></div>" +
@@ -680,7 +695,14 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
       }
     });
     focusOption(0);
-    toast(data.options.length + " routes scored for you.");
+    if (!data.options.length) {
+      el("options-out").innerHTML +=
+        '<p class="note">No suitable routes from this start point. Try somewhere ' +
+        "flatter, or a different starting place.</p>";
+      toast("No routes here suit your profile.", true);
+    } else {
+      toast(data.options.length + " routes scored for you.");
+    }
   } catch (error) { toast(error.message, true); }
 });
 

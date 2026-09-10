@@ -29,7 +29,15 @@ class RouteOptionSchema(BaseModel):
     score: float
     score_breakdown: dict[str, float]
     explanation: str
+    # Attributes the provider could not measure for this route, so the caller
+    # can say what is known rather than implying every number is surveyed.
+    unverified: list[str] = []
     geometry: list[tuple[float, float]]  # (lat, lon) points, full precision (not persisted)
+
+
+class ExcludedRouteSchema(BaseModel):
+    label: str
+    reason: str
 
 
 class RouteOptionsResponse(BaseModel):
@@ -41,6 +49,9 @@ class RouteOptionsResponse(BaseModel):
     # demo can never pass synthetic geometry off as real streets.
     provider: str
     options: list[RouteOptionSchema]
+    # Candidates withheld because they are not suitable for this person — shown
+    # with their reason rather than dropped silently.
+    excluded: list[ExcludedRouteSchema] = []
 
 
 class RouteSelectRequest(BaseModel):
