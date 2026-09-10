@@ -36,6 +36,10 @@ class RouteOptionsResponse(BaseModel):
     activity_recommendation_id: uuid.UUID
     activity_type: str
     target_duration_minutes: int
+    # Which RouteProvider produced these candidates ("mock" = synthetic,
+    # "ors" = real OpenStreetMap-derived routes). Clients surface this so a
+    # demo can never pass synthetic geometry off as real streets.
+    provider: str
     options: list[RouteOptionSchema]
 
 

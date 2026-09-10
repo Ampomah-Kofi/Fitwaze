@@ -25,6 +25,9 @@ def test_route_options_returns_up_to_three_scored_candidates(client):
     )
     assert resp.status_code == 200
     body = resp.json()
+    # The response says which provider produced the candidates, so a client can
+    # tell real routes from the synthetic ones the mock provider generates.
+    assert body["provider"] == "mock"
     assert 2 <= len(body["options"]) <= 3
     for option in body["options"]:
         assert 0 <= option["score"] <= 100

@@ -122,8 +122,11 @@
 
   <section id="s-route" data-locked="true">
     <h2>4 &middot; Route Engine</h2>
-    <p class="note" id="start-state">Click anywhere on the map to set your start point.</p>
-    <button id="btn-options" disabled>Generate route options</button>
+    <div class="row">
+      <button id="btn-locate" class="secondary">Use my current location</button>
+      <button id="btn-options" disabled>Generate route options</button>
+    </div>
+    <p class="note" id="start-state">Use your current location, or click anywhere on the map to set a start point.</p>
     <div id="options-out"></div>
   </section>
 
@@ -168,6 +171,7 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 let startMarker = null;
+let accuracyCircle = null;
 const routeLayer = L.layerGroup().addTo(map);
 
 function toast(message, isError) {
@@ -265,14 +269,68 @@ el("btn-recommend").onclick = async () => {
   } catch (error) { toast(error.message, true); }
 };
 
-map.on("click", (event) => {
-  startPoint = { latitude: event.latlng.lat, longitude: event.latlng.lng };
+function setStartPoint(lat, lon, accuracyMetres, label) {
+  startPoint = { latitude: lat, longitude: lon };
+
   if (startMarker) startMarker.remove();
-  startMarker = L.marker(event.latlng).addTo(map).bindPopup("Start point").openPopup();
+  if (accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
+
+  startMarker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
+  if (accuracyMetres) {
+    accuracyCircle = L.circle([lat, lon], {
+      radius: accuracyMetres, color: "#1f6feb", weight: 1, fillOpacity: 0.08,
+    }).addTo(map);
+  }
+
   el("start-state").textContent =
-    "Start point: " + startPoint.latitude.toFixed(4) + ", " + startPoint.longitude.toFixed(4);
+    label + ": " + lat.toFixed(4) + ", " + lon.toFixed(4) +
+    (accuracyMetres ? " (accurate to ~" + Math.round(accuracyMetres) + " m)" : "");
   el("btn-options").disabled = !recommendation;
+}
+
+map.on("click", (event) => {
+  setStartPoint(event.latlng.lat, event.latlng.lng, null, "Start point");
 });
+
+// Browser geolocation only works in a secure context: HTTPS, or localhost —
+// which is why the demo is served from the API's own origin on localhost. Over
+// a LAN address such as http://192.168.x.x the browser refuses outright, so say
+// so plainly rather than leaving the button looking broken.
+el("btn-locate").onclick = () => {
+  if (!navigator.geolocation) {
+    toast("This browser has no geolocation support. Click the map instead.", true);
+    return;
+  }
+  if (!window.isSecureContext) {
+    toast("Geolocation needs HTTPS or localhost. Click the map to set a start point.", true);
+    return;
+  }
+
+  const button = el("btn-locate");
+  button.disabled = true;
+  button.textContent = "Locating…";
+  const restore = () => { button.disabled = false; button.textContent = "Use my current location"; };
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      map.setView([latitude, longitude], 16);
+      setStartPoint(latitude, longitude, accuracy, "Your location");
+      toast("Located you to about " + Math.round(accuracy) + " m.");
+      restore();
+    },
+    (error) => {
+      const messages = {
+        1: "Location permission denied. Click the map to set a start point instead.",
+        2: "Your position is unavailable right now. Click the map instead.",
+        3: "Locating timed out. Try again, or click the map.",
+      };
+      toast(messages[error.code] || "Could not get your location.", true);
+      restore();
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+  );
+};
 
 function drawOptions(options) {
   routeLayer.clearLayers();
@@ -301,7 +359,13 @@ el("btn-options").onclick = async () => {
     });
     drawOptions(data.options);
 
-    el("options-out").innerHTML = data.options.map((option, index) =>
+    const isReal = data.provider === "ors";
+    const providerNote = isReal
+      ? '<p class="note" style="color:#1a7f4b">Real routes from OpenStreetMap data via OpenRouteService.</p>'
+      : '<p class="note" style="color:#a8620a">Synthetic demo routes (<code>ROUTE_PROVIDER=mock</code>) &mdash; ' +
+        "shaped like real ones, but not following actual streets.</p>";
+
+    el("options-out").innerHTML = providerNote + data.options.map((option, index) =>
       '<div class="option" style="border-left-color:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '">' +
       "<h3><span>" + esc(option.label.replace(/_/g, " ")) + '</span><span class="score">' +
       esc(option.score) + "</span></h3>" +

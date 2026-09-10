@@ -83,10 +83,20 @@ uvicorn app.main:app --reload
 # then open http://localhost:8000/demo
 ```
 
-Register an account, save the profile, ask for a recommendation, then **click
-anywhere on the map** to set a start point and generate route options. The three
-candidates are drawn in rank order (green = best) with their score and
-explanation; selecting one persists a session you can then complete.
+Register an account, save the profile, ask for a recommendation, then set a
+start point — either **Use my current location** (browser geolocation, shown
+with its accuracy radius) or by **clicking anywhere on the map** — and generate
+route options. The three candidates are drawn in rank order (green = best) with
+their score and explanation; selecting one persists a session you can complete.
+
+The options list states which provider produced the routes, so a synthetic
+`mock` route is never mistaken for a real street. `POST /route/options` returns
+the same information in its `provider` field.
+
+**Geolocation needs a secure context.** Browsers allow it on HTTPS and on
+`localhost` only. Opening the demo over a LAN address (`http://192.168.x.x`) on
+a phone will refuse to locate — put an HTTPS tunnel in front of it, or fall back
+to clicking the map.
 
 The page is served from the API's own origin (so no CORS exemption is needed)
 and is not exposed when `ENVIRONMENT=production` — it is a demonstration and QA

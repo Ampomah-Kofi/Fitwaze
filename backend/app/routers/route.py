@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.engines.route_engine import get_route_provider
 from app.engines.route_engine.base import RawRoute
@@ -102,6 +103,7 @@ def get_route_options(
         activity_recommendation_id=recommendation.id,
         activity_type=recommendation.activity_type.value,
         target_duration_minutes=recommendation.duration_minutes,
+        provider=get_settings().route_provider.lower(),
         options=options,
     )
 
