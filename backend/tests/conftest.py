@@ -100,3 +100,22 @@ def register_and_login(client: TestClient, email: str | None = None, password: s
 
 def auth_headers(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
+
+
+def valid_profile_payload(**overrides) -> dict:
+    payload = {
+        "age": 34,
+        "sex": "female",
+        "goal": "general_fitness",
+        "preferred_activity": "walk",
+        "current_weekly_minutes": 45,
+        "current_frequency": 2,
+        "height_cm": 165.5,
+        "weight_kg": 68.2,
+        "diabetes_status": "none",
+        "mobility_limitations": "none",
+        "walking_ability": "full",
+        "cycling_ability": "full",
+    }
+    payload.update(overrides)
+    return payload

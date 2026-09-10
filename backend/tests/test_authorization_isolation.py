@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.conftest import auth_headers, register_and_login
+from tests.conftest import auth_headers, register_and_login, valid_profile_payload
 
 
 @pytest.fixture
@@ -62,11 +62,65 @@ def test_user_a_token_cannot_be_used_after_tampering(client, two_users):
     assert resp.status_code == 401
 
 
+def test_profile_endpoints_are_scoped_to_the_caller_not_a_client_supplied_id(client, two_users):
+    """/profile has no id in its path at all -- it is always resolved from
+    the verified JWT. This proves user B's requests against /profile only
+    ever touch user B's own row, even after user A has created a profile."""
+    user_a, user_b = two_users
+
+    create_a = client.put(
+        "/profile", json=valid_profile_payload(age=50), headers=auth_headers(user_a["access_token"])
+    )
+    assert create_a.status_code == 200
+    assert create_a.json()["user_id"] == user_a["user_id"]
+
+    # User B has no profile yet -- GET must 404, never leak user A's profile.
+    get_b = client.get("/profile", headers=auth_headers(user_b["access_token"]))
+    assert get_b.status_code == 404
+
+    # User B creates their own profile with different data.
+    create_b = client.put(
+        "/profile", json=valid_profile_payload(age=22), headers=auth_headers(user_b["access_token"])
+    )
+    assert create_b.status_code == 200
+    assert create_b.json()["user_id"] == user_b["user_id"]
+
+    # Each user's GET must return only their own data.
+    get_a_again = client.get("/profile", headers=auth_headers(user_a["access_token"]))
+    assert get_a_again.json()["age"] == 50
+    get_b_again = client.get("/profile", headers=auth_headers(user_b["access_token"]))
+    assert get_b_again.json()["age"] == 22
+
+
+def test_profile_export_never_includes_other_users_data(client, two_users):
+    user_a, user_b = two_users
+    client.put(
+        "/profile",
+        json=valid_profile_payload(diabetes_status="type2"),
+        headers=auth_headers(user_a["access_token"]),
+    )
+
+    export_b = client.get("/profile/export", headers=auth_headers(user_b["access_token"]))
+    assert export_b.status_code == 200
+    assert export_b.json()["user"]["id"] == user_b["user_id"]
+    assert export_b.json()["health_profile"] is None
+
+
+def test_user_b_deleting_own_account_does_not_affect_user_a(client, two_users):
+    user_a, user_b = two_users
+    client.put("/profile", json=valid_profile_payload(), headers=auth_headers(user_a["access_token"]))
+    client.put("/profile", json=valid_profile_payload(), headers=auth_headers(user_b["access_token"]))
+
+    del_resp = client.delete("/profile/delete", headers=auth_headers(user_b["access_token"]))
+    assert del_resp.status_code == 204
+
+    # User A is completely unaffected.
+    still_there = client.get("/profile", headers=auth_headers(user_a["access_token"]))
+    assert still_there.status_code == 200
+
+
 # NOTE: additional cases covering
-#   - GET/PUT /profile, GET /profile/export, DELETE /profile/delete
 #   - POST /route/options, POST /route/select
 #   - GET /progress
-# using user A's known resource IDs from user B's session are added in
-# later steps of the build plan once those routers exist (see
-# test_profile.py-equivalent isolation cases inline below, and route/
-# progress isolation cases added alongside the route engine work).
+# using user A's known resource IDs from user B's session are added in a
+# later step of the build plan once those routers/resources exist.
