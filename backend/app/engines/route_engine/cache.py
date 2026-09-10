@@ -23,7 +23,7 @@ import logging
 import time
 
 from app.config import get_settings
-from app.engines.route_engine.base import RawRoute, RouteProvider
+from app.engines.route_engine.base import RawRoute, RouteProvider, returns_to_start
 from app.models.enums import ActivityTypeEnum
 
 logger = logging.getLogger(__name__)
@@ -98,8 +98,33 @@ def get_candidate_routes_cached(
         activity_type=activity_type,
         target_duration_min=target_duration_min,
     )
+    _warn_on_one_way_routes(provider, routes, start_lat, start_lon)
 
     _evict_expired_and_overflow(now)
     _cache[key] = (now + ttl_seconds, routes)
     logger.debug("route_cache_store provider=%s entries=%d", key[0], len(_cache))
     return routes
+
+
+def _warn_on_one_way_routes(
+    provider: RouteProvider, routes: list[RawRoute], start_lat: float, start_lon: float
+) -> None:
+    """Flag any provider that returns a route which does not come back.
+
+    Round trips are part of the RouteProvider contract (see `base.py`): the user
+    is somewhere, and needs to end up there again. A third-party provider that
+    breaks this would otherwise fail silently and strand people, so it is
+    logged loudly rather than quietly accepted. Nothing is dropped — a one-way
+    route is still better than no route while the provider is being fixed.
+    """
+    offenders = [
+        route.label or "unlabelled"
+        for route in routes
+        if not returns_to_start(route, start_lat, start_lon)
+    ]
+    if offenders:
+        logger.warning(
+            "route_provider_returned_one_way_routes provider=%s labels=%s",
+            type(provider).__name__,
+            ",".join(offenders),
+        )

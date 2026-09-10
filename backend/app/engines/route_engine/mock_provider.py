@@ -59,13 +59,27 @@ def _out_and_back_geometry(lat: float, lon: float, distance_m: float, bearing_de
 
 
 def _loop_geometry(lat: float, lon: float, distance_m: float, start_bearing_deg: float) -> list[tuple[float, float]]:
-    circumference = distance_m
-    radius = circumference / (2 * math.pi)
+    """A closed loop that begins and ends under the walker's own feet.
+
+    The circle is centred one radius away along `start_bearing_deg`, which puts
+    the start point on the circumference. Centring it on the start point
+    instead would draw a loop *around* the walker that never touches where they
+    are standing, leaving them a few hundred unaccounted-for metres from their
+    own route.
+    """
+    radius = distance_m / (2 * math.pi)
+    centre_lat, centre_lon = _offset_point(lat, lon, start_bearing_deg, radius)
+
+    # Bearing from the centre back to the start: where the walker joins the loop.
+    start_angle = start_bearing_deg + 180.0
+
     steps = 12
-    points = []
-    for i in range(steps + 1):
-        angle = start_bearing_deg + (360.0 * i / steps)
-        points.append(_offset_point(lat, lon, angle, radius))
+    points = [(lat, lon)]
+    for i in range(1, steps):
+        angle = start_angle + (360.0 * i / steps)
+        points.append(_offset_point(centre_lat, centre_lon, angle, radius))
+    # Close on the exact start rather than a floating-point near-miss.
+    points.append((lat, lon))
     return points
 
 

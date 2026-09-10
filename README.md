@@ -117,6 +117,19 @@ physiotherapist can argue with them. The strongest applicable signal wins rather
 than compounding, and a withheld limitation is treated as a mild one rather than
 as none.
 
+### Routes are round trips
+
+Every candidate begins and ends at the user's own start point. This is part of
+the `RouteProvider` contract, not an accident of the mock: FitWaze recommends
+activity from wherever someone happens to be, so a one-way route would strand
+them at the far end with a journey home nobody costed. `returns_to_start()`
+checks it, and the API logs a warning naming any provider that breaks it —
+worth knowing about when the Geography team plugs in their own.
+
+ORS satisfies this through its `round_trip` option. The mock generates an
+out-and-back plus two loops, each centred one radius off the start so the start
+point lies on the loop itself.
+
 ### Is the route actually walkable?
 
 Two separate questions, answered in two places.

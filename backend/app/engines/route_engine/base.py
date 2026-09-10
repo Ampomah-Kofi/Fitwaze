@@ -9,10 +9,16 @@ var, currently "mock" or "ors").
 """
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from app.models.enums import ActivityTypeEnum
+
+# How far a route's ends may sit from the requested start before it stops being
+# a round trip. Generous enough for a routing engine snapping to the nearest
+# path, tight enough that a walker is not left with a real walk home.
+ROUND_TRIP_TOLERANCE_M = 60.0
 
 
 @dataclass
@@ -66,5 +72,40 @@ class RouteProvider(ABC):
         target_duration_min: int,
     ) -> list[RawRoute]:
         """Return 2-3 candidate routes starting at (start_lat, start_lon) for
-        the given activity type, each roughly matching target_duration_min."""
+        the given activity type, each roughly matching target_duration_min.
+
+        REQUIRED: every route is a **round trip**. Its geometry must begin and
+        end at the given start point, because FitWaze recommends recreational
+        activity from wherever the user happens to be — they need to get home
+        again, and a one-way route would leave them stranded at the far end with
+        a journey nobody has accounted for. `returns_to_start()` below checks
+        this, and the API logs a warning for any provider that violates it.
+        """
         raise NotImplementedError
+
+
+def _metres_between(a: tuple[float, float], b: tuple[float, float]) -> float:
+    radius_m = 6371000.0
+    d_lat = math.radians(b[0] - a[0])
+    d_lon = math.radians(b[1] - a[1])
+    h = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(math.radians(a[0])) * math.cos(math.radians(b[0])) * math.sin(d_lon / 2) ** 2
+    )
+    return 2 * radius_m * math.asin(math.sqrt(h))
+
+
+def returns_to_start(
+    route: RawRoute,
+    start_lat: float,
+    start_lon: float,
+    tolerance_m: float = ROUND_TRIP_TOLERANCE_M,
+) -> bool:
+    """Whether a route both begins and ends at the requested start point."""
+    if not route.geometry:
+        return False
+    start = (start_lat, start_lon)
+    return (
+        _metres_between(start, route.geometry[0]) <= tolerance_m
+        and _metres_between(start, route.geometry[-1]) <= tolerance_m
+    )

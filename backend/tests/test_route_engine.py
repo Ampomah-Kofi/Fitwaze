@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from app.config import get_settings
-from app.engines.route_engine.base import RawRoute, RouteProvider
+from app.engines.route_engine.base import RawRoute, RouteProvider, returns_to_start
 from app.engines.route_engine.cache import clear_route_cache, get_candidate_routes_cached
 from app.engines.route_engine.mock_provider import MockRouteProvider
 from app.engines.route_engine.scoring import (
@@ -486,3 +488,58 @@ def test_cycling_gate_reads_cycling_ability_not_walking_ability():
     )
     assert len(walker_limited.ranked) == 1
     assert cyclist_limited.ranked == []
+
+
+# --- Round trips -----------------------------------------------------------
+
+
+def _gap_metres(a, b):
+    R = 6371000.0
+    d_lat = math.radians(b[0] - a[0])
+    d_lon = math.radians(b[1] - a[1])
+    h = (math.sin(d_lat / 2) ** 2
+         + math.cos(math.radians(a[0])) * math.cos(math.radians(b[0])) * math.sin(d_lon / 2) ** 2)
+    return 2 * R * math.asin(math.sqrt(h))
+
+
+@pytest.mark.parametrize("activity", [ActivityTypeEnum.walk, ActivityTypeEnum.cycle])
+@pytest.mark.parametrize("start", [(5.6037, -0.1870), (40.7128, -74.0060), (-33.9249, 18.4241)])
+@pytest.mark.parametrize("duration", [10, 30, 90])
+def test_every_candidate_starts_and_ends_where_the_user_is(activity, start, duration):
+    """A recreational route has to bring the walker home. A loop drawn *around*
+    the user rather than *through* them would leave them a few hundred metres
+    from their own route, unaccounted for at both ends."""
+    routes = MockRouteProvider().get_candidate_routes(start[0], start[1], activity, duration)
+    assert routes
+    for route in routes:
+        assert returns_to_start(route, start[0], start[1]), route.label
+        assert _gap_metres(start, route.geometry[0]) < 1.0
+        assert _gap_metres(start, route.geometry[-1]) < 1.0
+
+
+def test_loops_are_closed_and_actually_go_somewhere():
+    routes = MockRouteProvider().get_candidate_routes(5.6037, -0.1870, ActivityTypeEnum.walk, 30)
+    for route in routes:
+        assert route.geometry[0] == route.geometry[-1]
+        # A closed shape that never leaves the start point would satisfy every
+        # check above while being useless.
+        farthest = max(_gap_metres((5.6037, -0.1870), point) for point in route.geometry)
+        assert farthest > 100
+
+
+def test_returns_to_start_rejects_a_one_way_route():
+    one_way = RawRoute(
+        geometry=[(5.6037, -0.1870), (5.6137, -0.1870)],  # ~1.1 km away, no return
+        distance_m=1100.0, estimated_minutes=13, label="one_way",
+    )
+    assert not returns_to_start(one_way, 5.6037, -0.1870)
+
+
+def test_returns_to_start_tolerates_a_short_snap_to_the_nearest_path():
+    """A real routing engine snaps to the nearest way, so the ends land a few
+    metres off. That is a round trip, not a violation."""
+    snapped = RawRoute(
+        geometry=[(5.60375, -0.18705), (5.6047, -0.1880), (5.60374, -0.18703)],
+        distance_m=900.0, estimated_minutes=11, label="snapped",
+    )
+    assert returns_to_start(snapped, 5.6037, -0.1870)
