@@ -7,10 +7,12 @@ Alembic's env.py to see the full schema.
 from app.models.user import User, RefreshToken  # noqa: F401
 from app.models.profile import HealthProfile  # noqa: F401
 from app.models.activity import ActivityRecommendation  # noqa: F401
+from app.models.session import ActivitySession  # noqa: F401
 
 __all__ = [
     "User",
     "RefreshToken",
     "HealthProfile",
     "ActivityRecommendation",
+    "ActivitySession",
 ]

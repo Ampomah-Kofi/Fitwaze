@@ -1,0 +1,60 @@
+"""Pydantic schemas for route generation/selection.
+
+Coordinates are strictly validated (`latitude: Field(ge=-90, le=90)`, etc.)
+so malformed input never reaches the route engine or the database.
+"""
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.enums import SessionStatusEnum
+
+CandidateLabel = Literal["out_and_back", "small_loop", "large_loop"]
+
+
+class RouteOptionsRequest(BaseModel):
+    activity_recommendation_id: uuid.UUID
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class RouteOptionSchema(BaseModel):
+    label: CandidateLabel
+    distance_m: float
+    estimated_minutes: float
+    score: float
+    score_breakdown: dict[str, float]
+    explanation: str
+    geometry: list[tuple[float, float]]  # (lat, lon) points, full precision (not persisted)
+
+
+class RouteOptionsResponse(BaseModel):
+    activity_recommendation_id: uuid.UUID
+    activity_type: str
+    target_duration_minutes: int
+    options: list[RouteOptionSchema]
+
+
+class RouteSelectRequest(BaseModel):
+    activity_recommendation_id: uuid.UUID
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    candidate_label: CandidateLabel
+
+
+class RouteSessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    activity_recommendation_id: uuid.UUID
+    distance_m: float
+    estimated_minutes: int
+    score_breakdown: dict[str, float]
+    status: SessionStatusEnum
+    created_at: datetime
+    completed_at: datetime | None = None
+    route_geometry: list[tuple[float, float]] | None = None

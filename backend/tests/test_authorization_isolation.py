@@ -119,8 +119,42 @@ def test_user_b_deleting_own_account_does_not_affect_user_a(client, two_users):
     assert still_there.status_code == 200
 
 
+def test_user_b_cannot_get_route_options_for_user_as_recommendation(client, two_users):
+    """User B must not be able to generate route options against a
+    recommendation id that belongs to user A."""
+    user_a, user_b = two_users
+
+    client.put("/profile", json=valid_profile_payload(), headers=auth_headers(user_a["access_token"]))
+    rec_resp = client.post("/activity/recommendation", headers=auth_headers(user_a["access_token"]))
+    assert rec_resp.status_code == 200
+    recommendation_id = rec_resp.json()["id"]
+
+    resp = client.post(
+        "/route/options",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.0,
+            "longitude": -74.0,
+        },
+        headers=auth_headers(user_b["access_token"]),
+    )
+    assert resp.status_code in (403, 404)
+
+    # The rightful owner can still use their own recommendation.
+    own_resp = client.post(
+        "/route/options",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.0,
+            "longitude": -74.0,
+        },
+        headers=auth_headers(user_a["access_token"]),
+    )
+    assert own_resp.status_code == 200
+
+
 # NOTE: additional cases covering
-#   - POST /route/options, POST /route/select
+#   - POST /route/select
 #   - GET /progress
 # using user A's known resource IDs from user B's session are added in a
 # later step of the build plan once those routers/resources exist.
