@@ -153,8 +153,85 @@ def test_user_b_cannot_get_route_options_for_user_as_recommendation(client, two_
     assert own_resp.status_code == 200
 
 
-# NOTE: additional cases covering
-#   - POST /route/select
-#   - GET /progress
-# using user A's known resource IDs from user B's session are added in a
-# later step of the build plan once those routers/resources exist.
+def test_user_b_cannot_select_a_route_for_user_as_recommendation(client, two_users):
+    """A recommendation id belonging to user A must not be usable by user B to
+    create a session (which would also attach user A's recommendation to user
+    B's progress)."""
+    user_a, user_b = two_users
+
+    client.put("/profile", json=valid_profile_payload(), headers=auth_headers(user_a["access_token"]))
+    recommendation_id = client.post(
+        "/activity/recommendation", headers=auth_headers(user_a["access_token"])
+    ).json()["id"]
+
+    resp = client.post(
+        "/route/select",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.0,
+            "longitude": -74.0,
+            "candidate_label": "small_loop",
+        },
+        headers=auth_headers(user_b["access_token"]),
+    )
+    assert resp.status_code in (403, 404)
+
+
+def test_user_b_cannot_read_or_update_user_as_session(client, two_users):
+    user_a, user_b = two_users
+
+    client.put("/profile", json=valid_profile_payload(), headers=auth_headers(user_a["access_token"]))
+    recommendation_id = client.post(
+        "/activity/recommendation", headers=auth_headers(user_a["access_token"])
+    ).json()["id"]
+    session_id = client.post(
+        "/route/select",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.0,
+            "longitude": -74.0,
+            "candidate_label": "small_loop",
+        },
+        headers=auth_headers(user_a["access_token"]),
+    ).json()["id"]
+
+    assert client.get(
+        f"/route/sessions/{session_id}", headers=auth_headers(user_b["access_token"])
+    ).status_code in (403, 404)
+    assert client.patch(
+        f"/route/sessions/{session_id}",
+        json={"status": "completed"},
+        headers=auth_headers(user_b["access_token"]),
+    ).status_code in (403, 404)
+
+    # User A's session is untouched by user B's attempts.
+    own = client.get(
+        f"/route/sessions/{session_id}", headers=auth_headers(user_a["access_token"])
+    )
+    assert own.status_code == 200
+    assert own.json()["status"] == "selected"
+
+
+def test_progress_only_reflects_the_calling_users_sessions(client, two_users):
+    user_a, user_b = two_users
+
+    client.put("/profile", json=valid_profile_payload(), headers=auth_headers(user_a["access_token"]))
+    recommendation_id = client.post(
+        "/activity/recommendation", headers=auth_headers(user_a["access_token"])
+    ).json()["id"]
+    client.post(
+        "/route/select",
+        json={
+            "activity_recommendation_id": recommendation_id,
+            "latitude": 40.0,
+            "longitude": -74.0,
+            "candidate_label": "small_loop",
+        },
+        headers=auth_headers(user_a["access_token"]),
+    )
+
+    a_progress = client.get("/progress", headers=auth_headers(user_a["access_token"])).json()
+    b_progress = client.get("/progress", headers=auth_headers(user_b["access_token"])).json()
+    assert a_progress["sessions_selected"] == 1
+    assert b_progress["sessions_selected"] == 0
+    assert b_progress["recent_sessions"] == []

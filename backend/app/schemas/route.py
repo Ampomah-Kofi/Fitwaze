@@ -58,3 +58,11 @@ class RouteSessionResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
     route_geometry: list[tuple[float, float]] | None = None
+
+
+class RouteSessionUpdateRequest(BaseModel):
+    """Terminal transition for a selected session. Only `completed` and
+    `abandoned` are accepted — a client can never move a session back to
+    `offered`/`selected`, and Pydantic rejects anything else with a 422."""
+
+    status: Literal["completed", "abandoned"]
