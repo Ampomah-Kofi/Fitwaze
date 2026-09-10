@@ -10,11 +10,12 @@ selected via POST /route/select (added alongside activity_sessions).
 from __future__ import annotations
 
 import logging
-
 import uuid
 from datetime import datetime, timezone
+from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -231,3 +232,61 @@ def update_route_session(
     )
 
     return RouteSessionResponse.model_validate(session_row)
+
+
+def _session_to_gpx(session_row: ActivitySession, activity_type: str) -> str:
+    """Render a stored session as a GPX 1.1 track.
+
+    GPX is what walking/cycling apps read (OsmAnd, Komoot, Strava, Garmin) and
+    what GIS tooling expects, so it is the export that preserves the route
+    exactly. Handing a route to Apple or Google Maps can only approximate it:
+    those apps navigate between points and cannot be given a path to follow.
+    """
+    name = escape(f"FitWaze {activity_type} - {session_row.estimated_minutes} min")
+
+    created = session_row.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    created_utc = created.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    points = [
+        f'      <trkpt lat="{lat:.6f}" lon="{lon:.6f}" />'
+        for lat, lon in session_row.route_geometry
+    ]
+
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<gpx version="1.1" creator="FitWaze" xmlns="http://www.topografix.com/GPX/1/1">',
+        "  <metadata>",
+        f"    <name>{name}</name>",
+        f"    <time>{created_utc}</time>",
+        "  </metadata>",
+        "  <trk>",
+        f"    <name>{name}</name>",
+        "    <trkseg>",
+        *points,
+        "    </trkseg>",
+        "  </trk>",
+        "</gpx>",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+@router.get("/sessions/{session_id}/gpx")
+def download_route_gpx(
+    session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Export one of the caller's own sessions as a GPX track file."""
+    session_row = _get_own_session(db, session_id, current_user.id)
+    activity_type = session_row.activity_recommendation.activity_type.value
+
+    return Response(
+        content=_session_to_gpx(session_row, activity_type),
+        media_type="application/gpx+xml",
+        headers={
+            "Content-Disposition": f'attachment; filename="fitwaze-{session_row.id}.gpx"'
+        },
+    )

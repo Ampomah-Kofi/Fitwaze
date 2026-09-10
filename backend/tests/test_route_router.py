@@ -1,5 +1,7 @@
-"""Integration tests for POST /route/options."""
+"""Integration tests for the /route endpoints."""
 from __future__ import annotations
+
+import pytest
 
 from tests.conftest import auth_headers, register_and_login, valid_profile_payload
 
@@ -192,4 +194,48 @@ def test_route_select_requires_authentication(client):
             "candidate_label": "small_loop",
         },
     )
+    assert resp.status_code == 401
+
+
+def test_gpx_export_returns_the_stored_route(client):
+    user = register_and_login(client)
+    recommendation_id = _create_recommendation(client, user["access_token"])
+    body = _select_route(client, user["access_token"], recommendation_id).json()
+
+    resp = client.get(
+        f"/route/sessions/{body['id']}/gpx", headers=auth_headers(user["access_token"])
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/gpx+xml")
+    assert "attachment" in resp.headers["content-disposition"]
+
+    gpx = resp.text
+    assert gpx.startswith('<?xml version="1.0" encoding="UTF-8"?>')
+    # One <trkpt> per stored geometry point, and it must parse as real XML.
+    assert gpx.count("<trkpt") == len(body["route_geometry"])
+
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(gpx)
+    points = root.findall(".//{http://www.topografix.com/GPX/1/1}trkpt")
+    assert len(points) == len(body["route_geometry"])
+    first_lat, first_lon = body["route_geometry"][0]
+    assert float(points[0].get("lat")) == pytest.approx(first_lat, abs=1e-6)
+    assert float(points[0].get("lon")) == pytest.approx(first_lon, abs=1e-6)
+
+
+def test_gpx_export_is_scoped_to_the_owner(client):
+    owner = register_and_login(client)
+    other = register_and_login(client)
+    recommendation_id = _create_recommendation(client, owner["access_token"])
+    session_id = _select_route(client, owner["access_token"], recommendation_id).json()["id"]
+
+    resp = client.get(
+        f"/route/sessions/{session_id}/gpx", headers=auth_headers(other["access_token"])
+    )
+    assert resp.status_code == 404
+
+
+def test_gpx_export_requires_authentication(client):
+    resp = client.get("/route/sessions/00000000-0000-0000-0000-000000000000/gpx")
     assert resp.status_code == 401

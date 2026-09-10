@@ -93,6 +93,27 @@ The options list states which provider produced the routes, so a synthetic
 `mock` route is never mistaken for a real street. `POST /route/options` returns
 the same information in its `provider` field.
 
+### Handing a route to the phone's map app
+
+A selected session can leave the app two ways:
+
+- **Open in Maps** — Apple Maps on iOS, Google Maps elsewhere. Neither app can
+  be handed a path to follow; they route between points of their own choosing.
+  Google accepts up to 9 intermediate waypoints, so a loop survives roughly
+  intact. Apple's URL scheme takes only an origin and a destination, so the
+  handoff aims at the far side of the loop and the return leg is the walker's.
+  Apple Maps also has no cycling-directions flag, so a cycle route hands over as
+  a walking one. The UI states which approximation you are getting.
+- **Download GPX** (`GET /route/sessions/{id}/gpx`, owner-scoped) — the exact
+  route, readable by OsmAnd, Komoot, Strava, Garmin and any GIS tool. This is
+  the export to use for dissertation analysis.
+
+### Mobile layout
+
+Below 720px the map moves to the top of the screen and the steps stack beneath
+it, controls grow to a 44px touch target, and inputs use 16px type so iOS Safari
+does not zoom the page when a field is focused.
+
 **Geolocation needs a secure context.** Browsers allow it on HTTPS and on
 `localhost` only. Opening the demo over a LAN address (`http://192.168.x.x`) on
 a phone will refuse to locate — put an HTTPS tunnel in front of it, or fall back

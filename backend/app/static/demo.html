@@ -53,6 +53,27 @@
   #status.error { background: var(--bad); }
   .pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
   .disclaimer { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+  .handoff { display: flex; gap: 8px; margin-top: 10px; }
+  .handoff button { flex: 1; }
+
+  /* --- Phones -------------------------------------------------------------
+     The map goes on top where a thumb can reach it and the steps stack below
+     it in a scrolling sheet. Controls grow to 44px — Apple's minimum touch
+     target — and inputs use 16px type, below which iOS Safari zooms the whole
+     page on focus. */
+  @media (max-width: 720px) {
+    body { flex-direction: column; height: 100dvh; }
+    #map { height: 42dvh; flex: none; order: -1; }
+    #panel { width: 100%; flex: 1; border-right: none; border-top: 1px solid var(--line); padding: 12px; }
+    input, select { font-size: 16px; padding: 10px; }
+    button { padding: 12px 14px; min-height: 44px; width: 100%; }
+    .row { flex-direction: column; }
+    .row button { width: 100%; }
+    .handoff { flex-direction: column; }
+    .grid { grid-template-columns: 1fr; }
+    section { padding: 14px; }
+    #status { left: 12px; right: 12px; bottom: 12px; max-width: none; text-align: center; }
+  }
 </style>
 </head>
 <body>
@@ -133,7 +154,12 @@
   <section id="s-session" data-locked="true">
     <h2>5 &middot; Session</h2>
     <div id="session-out"></div>
-    <div class="row">
+    <div class="handoff">
+      <button id="btn-maps" class="secondary">Open in Maps</button>
+      <button id="btn-gpx" class="secondary">Download GPX</button>
+    </div>
+    <p class="note" id="handoff-note"></p>
+    <div class="row" style="margin-top:10px">
       <button id="btn-complete">Mark completed</button>
       <button id="btn-abandon" class="secondary">Abandon</button>
     </div>
@@ -423,6 +449,92 @@ async function updateSession(status) {
 
 el("btn-complete").onclick = () => updateSession("completed");
 el("btn-abandon").onclick = () => updateSession("abandoned");
+
+// --- Handing the route to the phone's own map app --------------------------
+// Neither Apple Maps nor Google Maps can be given a path to follow: they route
+// between points of their own choosing. Google at least accepts intermediate
+// waypoints (9 at most via URL), so a loop survives roughly intact; Apple's URL
+// scheme takes only an origin and a destination, so the best we can do is send
+// the user to the far side of the loop. GPX is the lossless option, and the UI
+// says which one you are getting.
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+function sampleWaypoints(geometry, count) {
+  if (geometry.length <= count) return geometry.slice(1, -1);
+  const step = Math.floor(geometry.length / (count + 1));
+  const picks = [];
+  for (let i = 1; i <= count; i++) picks.push(geometry[i * step]);
+  return picks;
+}
+
+function farthestPoint(geometry, origin) {
+  let best = geometry[0];
+  let bestDistance = -1;
+  geometry.forEach((point) => {
+    const dLat = point[0] - origin[0];
+    const dLon = point[1] - origin[1];
+    const distance = dLat * dLat + dLon * dLon;
+    if (distance > bestDistance) { bestDistance = distance; best = point; }
+  });
+  return best;
+}
+
+function mapsUrlFor(geometry, activityType) {
+  const origin = geometry[0];
+  const coord = (point) => point[0].toFixed(6) + "," + point[1].toFixed(6);
+
+  if (IS_IOS) {
+    // dirflg: w = walking, d = driving. Apple Maps has no cycling directions
+    // flag, so a cycle route is handed over as a walking one.
+    const destination = farthestPoint(geometry, origin);
+    return {
+      url: "https://maps.apple.com/?saddr=" + coord(origin) + "&daddr=" + coord(destination) + "&dirflg=w",
+      note: "Apple Maps takes only a start and an end, so it will navigate you to the far " +
+            "point of the loop — the return leg is yours. Download the GPX for the exact route.",
+    };
+  }
+
+  const waypoints = sampleWaypoints(geometry, 8).map(coord).join("|");
+  const travelMode = activityType === "cycle" ? "bicycling" : "walking";
+  return {
+    url: "https://www.google.com/maps/dir/?api=1&origin=" + coord(origin) +
+         "&destination=" + coord(origin) + "&travelmode=" + travelMode +
+         (waypoints ? "&waypoints=" + encodeURIComponent(waypoints) : ""),
+    note: "Google Maps accepts up to 9 waypoints, so this is a close approximation of the " +
+          "loop rather than the exact path. Download the GPX for the exact route.",
+  };
+}
+
+el("btn-maps").onclick = () => {
+  if (!session || !session.route_geometry) return;
+  const activityType = recommendation ? recommendation.activity_type : "walk";
+  const handoff = mapsUrlFor(session.route_geometry, activityType);
+  el("handoff-note").textContent = handoff.note;
+  window.open(handoff.url, "_blank", "noopener");
+};
+
+el("btn-gpx").onclick = async () => {
+  if (!session) return;
+  try {
+    // Fetched rather than linked, because the endpoint needs the bearer token.
+    const response = await fetch("/route/sessions/" + session.id + "/gpx", {
+      headers: { Authorization: "Bearer " + accessToken },
+    });
+    if (!response.ok) throw new Error("GPX export failed (" + response.status + ")");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "fitwaze-" + session.id + ".gpx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    el("handoff-note").textContent =
+      "GPX holds the exact route. Open it in OsmAnd, Komoot, Strava or any GIS tool.";
+  } catch (error) { toast(error.message, true); }
+};
 
 async function refreshProgress() {
   if (!accessToken) return;
