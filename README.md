@@ -73,10 +73,11 @@ to be credited alongside it.
 
 ## Demo client
 
-A single-file Leaflet page drives the whole flow — register, health profile,
-activity recommendation, route options on a map, session selection, completion
-and progress — against a running API:
-
+A single-file page simulating the mobile app: a phone frame on a desktop screen,
+full-screen on a handset, with a bottom tab bar (Today / Route / Progress). It
+drives the whole flow — register, health profile, activity recommendation, route
+options on a map, live tracking, session completion and progress — against a
+running API:
 ```bash
 cd backend
 uvicorn app.main:app --reload
@@ -92,6 +93,29 @@ their score and explanation; selecting one persists a session you can complete.
 The options list states which provider produced the routes, so a synthetic
 `mock` route is never mistaken for a real street. `POST /route/options` returns
 the same information in its `provider` field.
+
+### Personalised route scoring
+
+Route scores are not the same for everyone. `terrain_emphasis()` in
+`scoring.py` reads the caller's own health profile — reported mobility
+limitation, the ability relevant to the activity, and age — and raises the
+weight of the terrain factors (`slope_inv`, `step_free`, crossings and
+intersection complexity) accordingly, renormalising so scores stay on the same
+0-100 scale. Steps are tracked separately from slope, because they are a
+different obstacle: a hill is tiring, a flight of stairs can be impassable.
+
+Worked example — the same two candidates, three different people:
+
+| Profile | Ranking |
+| --- | --- |
+| No limitation, age 34 | stepped park route (82.9) > flat pavement (75.1) |
+| Moderate limitation | flat pavement (79.7) > stepped park route (70.2) |
+| Severe limitation | flat pavement (81.3) > stepped park route (65.7) |
+
+The multipliers are module-level constants with names, so a supervisor or
+physiotherapist can argue with them. The strongest applicable signal wins rather
+than compounding, and a withheld limitation is treated as a mild one rather than
+as none.
 
 ### Live tracking
 

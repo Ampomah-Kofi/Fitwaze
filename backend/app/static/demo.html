@@ -2,186 +2,289 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1720" />
 <title>FitWaze demo</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root {
-    --bg: #f6f7f9;
-    --panel: #ffffff;
-    --ink: #1c2024;
-    --muted: #5f6b76;
-    --line: #dfe3e8;
+    --ink: #0f1720;
+    --muted: #64717f;
+    --line: #e4e8ed;
+    --bg: #f5f7f9;
+    --card: #ffffff;
     --accent: #1f6feb;
+    --good: #1a7f4b;
+    --warn: #a8620a;
     --bad: #b4232c;
+    --radius: 14px;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
   body {
     margin: 0;
-    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     color: var(--ink);
     background: var(--bg);
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
   }
-  #panel { width: 400px; flex: none; overflow-y: auto; padding: 16px; background: var(--panel); border-right: 1px solid var(--line); }
-  #map { flex: 1; }
-  h1 { font-size: 17px; margin: 0 0 2px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
-  .tagline { color: var(--muted); margin: 0 0 16px; font-size: 12px; }
-  section { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-  section[data-locked="true"] { opacity: .45; pointer-events: none; }
-  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
-  input, select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; color: inherit; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  button { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
-  button.secondary { background: #fff; color: var(--accent); }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; }
-  .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
-  .option { border: 1px solid var(--line); border-left-width: 5px; border-radius: 6px; padding: 10px; margin-bottom: 8px; }
-  .option h3 { margin: 0 0 4px; font-size: 14px; display: flex; justify-content: space-between; text-transform: capitalize; }
-  .option p { margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
-  .score { font-variant-numeric: tabular-nums; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .stat { background: var(--bg); border-radius: 6px; padding: 8px; }
-  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
-  .stat span { font-size: 11px; color: var(--muted); }
-  #status { position: fixed; bottom: 12px; left: 416px; background: var(--ink); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 60vw; }
-  #status.show { opacity: 1; }
-  #status.error { background: var(--bad); }
-  .pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
-  .disclaimer { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
-  .handoff { display: flex; gap: 8px; margin-top: 10px; }
-  .handoff button { flex: 1; }
 
-  /* --- Phones -------------------------------------------------------------
-     The map goes on top where a thumb can reach it and the steps stack below
-     it in a scrolling sheet. Controls grow to 44px — Apple's minimum touch
-     target — and inputs use 16px type, below which iOS Safari zooms the whole
-     page on focus. */
-  @media (max-width: 720px) {
-    body { flex-direction: column; height: 100dvh; }
-    #map { height: 42dvh; flex: none; order: -1; }
-    #panel { width: 100%; flex: 1; border-right: none; border-top: 1px solid var(--line); padding: 12px; }
-    input, select { font-size: 16px; padding: 10px; }
-    button { padding: 12px 14px; min-height: 44px; width: 100%; }
-    .row { flex-direction: column; }
-    .row button { width: 100%; }
-    .handoff { flex-direction: column; }
-    .grid { grid-template-columns: 1fr; }
-    section { padding: 14px; }
-    #status { left: 12px; right: 12px; bottom: 12px; max-width: none; text-align: center; }
+  /* --- Device shell ------------------------------------------------------
+     On a desktop this is a phone sitting on a desk, so the demo reads as an
+     app rather than a web page. On a real handset the frame disappears and the
+     app simply fills the screen. */
+  #device {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    overflow: hidden;
+    height: 100dvh;
+    width: 100%;
   }
+  @media (min-width: 721px) {
+    body { display: grid; place-items: center; background: #dfe4ea; }
+    #device {
+      width: 393px;
+      height: 852px;
+      max-height: 96vh;
+      border: 12px solid #0f1720;
+      border-radius: 46px;
+      box-shadow: 0 30px 60px rgba(15, 23, 32, .35);
+    }
+  }
+
+  /* Fake status bar, purely to sell the simulation. */
+  #statusbar {
+    flex: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 22px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--card);
+  }
+  #statusbar .icons { letter-spacing: 2px; font-size: 11px; color: var(--muted); }
+
+  #appbar {
+    flex: none;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 20px 12px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+  }
+  #appbar h1 { font-size: 20px; margin: 0; letter-spacing: -.02em; }
+  #appbar span { font-size: 11px; color: var(--muted); }
+
+  main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .screen { display: none; padding: 16px; }
+  .screen.active { display: block; }
+  .screen h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+  .card p:last-child { margin-bottom: 0; }
+
+  label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+  input, select {
+    width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+    font: inherit; font-size: 16px; background: #fff; color: inherit; margin-bottom: 10px;
+  }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  button {
+    font: inherit; font-weight: 600; width: 100%; min-height: 48px;
+    padding: 13px 16px; border-radius: 12px; border: none;
+    background: var(--accent); color: #fff; cursor: pointer; margin-bottom: 8px;
+  }
+  button.ghost { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  button.quiet { background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+  button.danger { background: #fff; color: var(--bad); border: 1px solid var(--line); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  #map { height: 300px; border-radius: var(--radius); border: 1px solid var(--line); margin-bottom: 12px; }
+
+  .option { background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--muted); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+  .option .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .option .name { font-weight: 600; text-transform: capitalize; }
+  .option .score { font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .option .why { font-size: 13px; color: var(--muted); margin: 6px 0 10px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .stat span { font-size: 11px; color: var(--muted); }
+
+  .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .banner { font-size: 12px; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .banner.real { background: #e8f5ee; color: var(--good); }
+  .banner.mock { background: #fdf3e7; color: var(--warn); }
+  .disclaimer { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+
+  /* Bottom tab bar, the way a native app navigates. */
+  #tabs {
+    flex: none; display: grid; grid-template-columns: repeat(3, 1fr);
+    background: var(--card); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #tabs button {
+    background: none; border: none; color: var(--muted); margin: 0;
+    padding: 10px 4px 12px; font-size: 11px; font-weight: 600; border-radius: 0;
+  }
+  #tabs button .glyph { display: block; font-size: 19px; margin-bottom: 2px; }
+  #tabs button[aria-selected="true"] { color: var(--accent); }
+  #tabs[hidden] { display: none; }
+
+  #status {
+    position: absolute; left: 16px; right: 16px; bottom: 82px; z-index: 900;
+    background: var(--ink); color: #fff; padding: 11px 14px; border-radius: 12px;
+    font-size: 13px; text-align: center; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  #status.show { opacity: .96; }
+  #status.error { background: var(--bad); }
 </style>
 </head>
 <body>
-<div id="panel">
-  <h1>FitWaze</h1>
-  <p class="tagline">PERSON + PLACE = PERSONALIZED PHYSICAL ACTIVITY</p>
+<div id="device">
+  <div id="statusbar">
+    <span id="clock">9:41</span>
+    <span class="icons">▲▲▲ ▮▮▮</span>
+  </div>
 
-  <section id="s-account">
-    <h2>1 &middot; Account</h2>
-    <div class="grid">
-      <div><label for="email">Email</label><input id="email" type="email" autocomplete="username" /></div>
-      <div><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" /></div>
-    </div>
-    <div class="row">
-      <button id="btn-register">Register</button>
-      <button id="btn-login" class="secondary">Log in</button>
-    </div>
-    <p class="note" id="account-state">Not signed in.</p>
-  </section>
+  <div id="appbar">
+    <h1>FitWaze</h1>
+    <span>person + place</span>
+  </div>
 
-  <section id="s-profile" data-locked="true">
-    <h2>2 &middot; Health profile</h2>
-    <div class="grid">
-      <div><label for="age">Age</label><input id="age" type="number" value="34" min="13" max="120" /></div>
-      <div><label for="sex">Sex</label><select id="sex">
-        <option value="female">Female</option><option value="male">Male</option>
-        <option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option>
-      </select></div>
-      <div><label for="goal">Goal</label><select id="goal">
-        <option value="general_fitness">General fitness</option>
-        <option value="weight_management">Weight management</option>
-        <option value="manage_prediabetes">Manage prediabetes</option>
-        <option value="manage_type2">Manage type 2 diabetes</option>
-      </select></div>
-      <div><label for="preferred_activity">Preference</label><select id="preferred_activity">
-        <option value="no_preference">No preference</option>
-        <option value="walk">Walk</option><option value="cycle">Cycle</option>
-      </select></div>
-      <div><label for="current_weekly_minutes">Weekly minutes now</label><input id="current_weekly_minutes" type="number" value="45" min="0" max="3000" /></div>
-      <div><label for="current_frequency">Sessions per week</label><input id="current_frequency" type="number" value="2" min="0" max="21" /></div>
-      <div><label for="height_cm">Height (cm)</label><input id="height_cm" type="number" value="165.5" step="0.1" /></div>
-      <div><label for="weight_kg">Weight (kg)</label><input id="weight_kg" type="number" value="68.2" step="0.1" /></div>
-      <div><label for="diabetes_status">Diabetes status</label><select id="diabetes_status">
-        <option value="none">None</option><option value="prediabetes">Prediabetes</option>
-        <option value="type2">Type 2</option><option value="prefer_not_to_say">Prefer not to say</option>
-      </select></div>
-      <div><label for="mobility_limitations">Mobility limitations</label><select id="mobility_limitations">
-        <option value="none">None</option><option value="mild">Mild</option>
-        <option value="moderate">Moderate</option><option value="severe">Severe</option>
-        <option value="prefer_not_to_say">Prefer not to say</option>
-      </select></div>
-      <div><label for="walking_ability">Walking ability</label><select id="walking_ability">
-        <option value="full">Full</option><option value="limited">Limited</option><option value="unable">Unable</option>
-      </select></div>
-      <div><label for="cycling_ability">Cycling ability</label><select id="cycling_ability">
-        <option value="full">Full</option><option value="limited">Limited</option><option value="unable">Unable</option>
-      </select></div>
-    </div>
-    <button id="btn-profile">Save profile</button>
-  </section>
+  <main>
+    <!-- ---------- Sign in ---------- -->
+    <section id="screen-auth" class="screen active">
+      <div class="card">
+        <h3>Welcome</h3>
+        <p>Personalised walking and cycling routes, matched to your health profile
+           and to what is actually around you.</p>
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" placeholder="you@example.com" />
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="At least 12 characters" />
+        <button id="btn-register">Create account</button>
+        <button id="btn-login" class="ghost">I already have one</button>
+        <p class="note" id="account-state">Not signed in.</p>
+      </div>
+    </section>
 
-  <section id="s-recommendation" data-locked="true">
-    <h2>3 &middot; Activity Engine</h2>
-    <button id="btn-recommend">Get my recommendation</button>
-    <div id="recommendation-out"></div>
-  </section>
+    <!-- ---------- Today ---------- -->
+    <section id="screen-today" class="screen">
+      <h2>Your profile</h2>
+      <div class="card">
+        <div class="pair">
+          <div><label for="age">Age</label><input id="age" type="number" value="34" min="13" max="120" /></div>
+          <div><label for="sex">Sex</label><select id="sex">
+            <option value="female">Female</option><option value="male">Male</option>
+            <option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option>
+          </select></div>
+        </div>
+        <label for="goal">Goal</label>
+        <select id="goal">
+          <option value="general_fitness">General fitness</option>
+          <option value="weight_management">Weight management</option>
+          <option value="manage_prediabetes">Manage prediabetes</option>
+          <option value="manage_type2">Manage type 2 diabetes</option>
+        </select>
+        <label for="preferred_activity">I prefer to</label>
+        <select id="preferred_activity">
+          <option value="no_preference">No preference</option>
+          <option value="walk">Walk</option><option value="cycle">Cycle</option>
+        </select>
+        <div class="pair">
+          <div><label for="current_weekly_minutes">Active minutes / week</label><input id="current_weekly_minutes" type="number" value="45" min="0" max="3000" /></div>
+          <div><label for="current_frequency">Sessions / week</label><input id="current_frequency" type="number" value="2" min="0" max="21" /></div>
+          <div><label for="height_cm">Height (cm)</label><input id="height_cm" type="number" value="165.5" step="0.1" /></div>
+          <div><label for="weight_kg">Weight (kg)</label><input id="weight_kg" type="number" value="68.2" step="0.1" /></div>
+        </div>
+        <label for="diabetes_status">Diabetes status</label>
+        <select id="diabetes_status">
+          <option value="none">None</option><option value="prediabetes">Prediabetes</option>
+          <option value="type2">Type 2</option><option value="prefer_not_to_say">Prefer not to say</option>
+        </select>
 
-  <section id="s-route" data-locked="true">
-    <h2>4 &middot; Route Engine</h2>
-    <div class="row">
-      <button id="btn-locate" class="secondary">Use my current location</button>
-      <button id="btn-options" disabled>Generate route options</button>
-    </div>
-    <p class="note" id="start-state">Use your current location, or click anywhere on the map to set a start point.</p>
-    <div id="options-out"></div>
-  </section>
+        <h3 style="font-size:14px;margin:14px 0 8px">Getting around</h3>
+        <p style="margin-bottom:8px">This is what decides how hard the route engine works to
+           avoid steps, hills and busy crossings for you.</p>
+        <label for="mobility_limitations">Mobility limitations</label>
+        <select id="mobility_limitations">
+          <option value="none">None</option><option value="mild">Mild</option>
+          <option value="moderate">Moderate</option><option value="severe">Severe</option>
+          <option value="prefer_not_to_say">Prefer not to say</option>
+        </select>
+        <div class="pair">
+          <div><label for="walking_ability">Walking</label><select id="walking_ability">
+            <option value="full">Full</option><option value="limited">Limited</option><option value="unable">Unable</option>
+          </select></div>
+          <div><label for="cycling_ability">Cycling</label><select id="cycling_ability">
+            <option value="full">Full</option><option value="limited">Limited</option><option value="unable">Unable</option>
+          </select></div>
+        </div>
+        <button id="btn-profile">Save profile</button>
+      </div>
 
-  <section id="s-session" data-locked="true">
-    <h2>5 &middot; Session</h2>
-    <div id="session-out"></div>
-    <button id="btn-track" style="margin-top:10px">Start activity</button>
-    <div id="track-out" class="stats" style="margin-top:10px" hidden></div>
-    <button id="btn-recentre" class="secondary" style="margin-top:8px" hidden>Recentre on me</button>
-    <p class="note" id="track-note"></p>
+      <h2>Today's activity</h2>
+      <div class="card">
+        <button id="btn-recommend">Get my recommendation</button>
+        <div id="recommendation-out"></div>
+      </div>
+    </section>
 
-    <div class="handoff">
-      <button id="btn-maps" class="secondary">Open in Maps</button>
-      <button id="btn-gpx" class="secondary">Download GPX</button>
-    </div>
-    <p class="note" id="handoff-note"></p>
-    <div class="row" style="margin-top:10px">
-      <button id="btn-complete">Mark completed</button>
-      <button id="btn-abandon" class="secondary">Abandon</button>
-    </div>
-  </section>
+    <!-- ---------- Route ---------- -->
+    <section id="screen-route" class="screen">
+      <div id="map"></div>
+      <button id="btn-locate" class="ghost">Use my current location</button>
+      <p class="note" id="start-state">Tap the map, or use your current location, to set a start point.</p>
+      <button id="btn-options" disabled style="margin-top:10px">Find my routes</button>
+      <div id="options-out"></div>
 
-  <section id="s-progress" data-locked="true">
-    <h2>6 &middot; Progress</h2>
-    <div id="progress-out" class="stats"></div>
-    <button id="btn-progress" class="secondary" style="margin-top:8px">Refresh</button>
-  </section>
+      <div id="session-card" class="card" hidden>
+        <h3>Your session</h3>
+        <div id="session-out"></div>
+        <button id="btn-track">Start activity</button>
+        <div id="track-out" class="stats" hidden></div>
+        <button id="btn-recentre" class="quiet" style="margin-top:8px" hidden>Recentre on me</button>
+        <p class="note" id="track-note"></p>
+        <div class="side-by-side" style="margin-top:10px">
+          <button id="btn-maps" class="quiet">Open in Maps</button>
+          <button id="btn-gpx" class="quiet">Download GPX</button>
+        </div>
+        <p class="note" id="handoff-note"></p>
+        <div class="side-by-side" style="margin-top:6px">
+          <button id="btn-complete">Finish</button>
+          <button id="btn-abandon" class="danger">Abandon</button>
+        </div>
+      </div>
+    </section>
 
-  <p class="note">Map data &copy; OpenStreetMap contributors. Route geometry comes from
-    whichever <code>ROUTE_PROVIDER</code> the API is configured with.</p>
+    <!-- ---------- Progress ---------- -->
+    <section id="screen-progress" class="screen">
+      <h2>Your progress</h2>
+      <div id="progress-out" class="stats"></div>
+      <button id="btn-progress" class="quiet" style="margin-top:12px">Refresh</button>
+      <p class="note">Map data &copy; OpenStreetMap contributors.</p>
+    </section>
+  </main>
+
+  <nav id="tabs" hidden>
+    <button data-screen="today" aria-selected="true"><span class="glyph">☀</span>Today</button>
+    <button data-screen="route" aria-selected="false"><span class="glyph">◎</span>Route</button>
+    <button data-screen="progress" aria-selected="false"><span class="glyph">▤</span>Progress</button>
+  </nav>
+
+  <div id="status"></div>
 </div>
-
-<div id="map"></div>
-<div id="status"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -192,7 +295,7 @@ let recommendation = null;
 let startPoint = null;
 let session = null;
 
-const RANK_COLORS = ["#1a7f4b", "#a8620a", "#5f6b76"];
+const RANK_COLORS = ["#1a7f4b", "#a8620a", "#64717f"];
 const el = (id) => document.getElementById(id);
 
 const map = L.map("map").setView([40.7128, -74.006], 14);
@@ -205,6 +308,33 @@ let startMarker = null;
 let accuracyCircle = null;
 const routeLayer = L.layerGroup().addTo(map);
 
+// --- App shell -------------------------------------------------------------
+function showScreen(name) {
+  ["auth", "today", "route", "progress"].forEach((screen) => {
+    const node = el("screen-" + screen);
+    if (screen === name) node.classList.add("active");
+    else node.classList.remove("active");
+  });
+  document.querySelectorAll("#tabs button").forEach((tab) => {
+    tab.setAttribute("aria-selected", String(tab.dataset.screen === name));
+  });
+  // Leaflet measures its container on creation; a container that was hidden
+  // then shown renders grey tiles until it is told to measure again.
+  if (name === "route") setTimeout(() => map.invalidateSize(), 60);
+}
+
+document.querySelectorAll("#tabs button").forEach((tab) => {
+  tab.onclick = () => showScreen(tab.dataset.screen);
+});
+
+function tickClock() {
+  const now = new Date();
+  el("clock").textContent =
+    now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0");
+}
+tickClock();
+setInterval(tickClock, 20000);
+
 function toast(message, isError) {
   const box = el("status");
   box.textContent = message;
@@ -213,11 +343,7 @@ function toast(message, isError) {
   toast.timer = setTimeout(() => { box.className = ""; }, 3600);
 }
 
-function unlock(id) { el(id).dataset.locked = "false"; }
-
 // Escapes anything that came back from the API before it goes near innerHTML.
-// Rationale text is template-generated server-side, but the demo should not be
-// the one place that trusts a response body blindly.
 function esc(value) {
   return String(value).replace(/[&<>"']/g, (c) => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
@@ -269,7 +395,8 @@ async function authenticate(path) {
     const data = await api(path, { method: "POST", body: { email: email, password: password } });
     accessToken = data.access_token;
     el("account-state").textContent = "Signed in as " + data.user.email;
-    ["s-profile", "s-recommendation", "s-route", "s-progress"].forEach(unlock);
+    el("tabs").hidden = false;
+    showScreen("today");
     toast("Signed in.");
     refreshProgress();
   } catch (error) {
@@ -291,10 +418,12 @@ el("btn-recommend").onclick = async () => {
   try {
     recommendation = await api("/activity/recommendation", { method: "POST" });
     el("recommendation-out").innerHTML =
-      '<p style="margin:10px 0 4px"><b>' + esc(recommendation.activity_type) + " &middot; " +
-      esc(recommendation.duration_minutes) + ' minutes</b></p><p class="note">' +
-      esc(recommendation.rationale) + '</p><p class="disclaimer">' +
-      esc(recommendation.disclaimer) + "</p>";
+      '<h3 style="margin-top:12px">' + esc(recommendation.activity_type) + " &middot; " +
+      esc(recommendation.duration_minutes) + " minutes</h3>" +
+      "<p>" + esc(recommendation.rationale) + "</p>" +
+      '<button id="btn-goroute" class="ghost">Find a route for this</button>' +
+      '<p class="disclaimer">' + esc(recommendation.disclaimer) + "</p>";
+    el("btn-goroute").onclick = () => showScreen("route");
     el("btn-options").disabled = !startPoint;
     toast("Recommendation ready.");
   } catch (error) { toast(error.message, true); }
@@ -329,11 +458,11 @@ map.on("click", (event) => {
 // so plainly rather than leaving the button looking broken.
 el("btn-locate").onclick = () => {
   if (!navigator.geolocation) {
-    toast("This browser has no geolocation support. Click the map instead.", true);
+    toast("This browser has no geolocation support. Tap the map instead.", true);
     return;
   }
   if (!window.isSecureContext) {
-    toast("Geolocation needs HTTPS or localhost. Click the map to set a start point.", true);
+    toast("Geolocation needs HTTPS or localhost. Tap the map to set a start point.", true);
     return;
   }
 
@@ -352,9 +481,9 @@ el("btn-locate").onclick = () => {
     },
     (error) => {
       const messages = {
-        1: "Location permission denied. Click the map to set a start point instead.",
-        2: "Your position is unavailable right now. Click the map instead.",
-        3: "Locating timed out. Try again, or click the map.",
+        1: "Location permission denied. Tap the map to set a start point instead.",
+        2: "Your position is unavailable right now. Tap the map instead.",
+        3: "Locating timed out. Try again, or tap the map.",
       };
       toast(messages[error.code] || "Could not get your location.", true);
       restore();
@@ -372,7 +501,7 @@ function drawOptions(options) {
       weight: index === 0 ? 6 : 4,
       opacity: index === 0 ? 0.95 : 0.6,
     }).addTo(routeLayer);
-    line.bindTooltip(option.label.replace(/_/g, " ") + " &middot; score " + option.score);
+    line.bindTooltip(option.label.replace(/_/g, " ") + " · score " + option.score);
     option.geometry.forEach((point) => bounds.push(point));
   });
   if (bounds.length) map.fitBounds(L.latLngBounds(bounds).pad(0.2));
@@ -391,25 +520,26 @@ el("btn-options").onclick = async () => {
     drawOptions(data.options);
 
     const isReal = data.provider === "ors";
-    const providerNote = isReal
-      ? '<p class="note" style="color:#1a7f4b">Real routes from OpenStreetMap data via OpenRouteService.</p>'
-      : '<p class="note" style="color:#a8620a">Synthetic demo routes (<code>ROUTE_PROVIDER=mock</code>) &mdash; ' +
-        "shaped like real ones, but not following actual streets.</p>";
+    const banner = isReal
+      ? '<div class="banner real">Real routes from OpenStreetMap data.</div>'
+      : '<div class="banner mock">Synthetic demo routes (ROUTE_PROVIDER=mock) — shaped like ' +
+        "real ones, but not following actual streets.</div>";
 
-    el("options-out").innerHTML = providerNote + data.options.map((option, index) =>
+    el("options-out").innerHTML = banner + data.options.map((option, index) =>
       '<div class="option" style="border-left-color:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '">' +
-      "<h3><span>" + esc(option.label.replace(/_/g, " ")) + '</span><span class="score">' +
-      esc(option.score) + "</span></h3>" +
-      '<p><span class="pill">' + (option.distance_m / 1000).toFixed(2) + " km</span> " +
-      '<span class="pill">' + Math.round(option.estimated_minutes) + " min</span></p>" +
-      "<p>" + esc(option.explanation) + "</p>" +
-      '<button data-select="' + esc(option.label) + '">Select this route</button></div>'
+      '<div class="top"><span class="name">' + esc(option.label.replace(/_/g, " ")) + "</span>" +
+      '<span class="score">' + esc(option.score) + "</span></div>" +
+      '<div class="chips"><span class="chip">' + (option.distance_m / 1000).toFixed(2) + " km</span>" +
+      '<span class="chip">' + Math.round(option.estimated_minutes) + " min</span>" +
+      '<span class="chip">' + Math.round((option.score_breakdown.step_free || 0) * 100) + "% step-free</span></div>" +
+      '<p class="why">' + esc(option.explanation) + "</p>" +
+      '<button data-select="' + esc(option.label) + '">Choose this route</button></div>'
     ).join("");
 
     el("options-out").querySelectorAll("[data-select]").forEach((button) => {
       button.onclick = () => selectRoute(button.dataset.select);
     });
-    toast(data.options.length + " routes scored.");
+    toast(data.options.length + " routes scored for you.");
   } catch (error) { toast(error.message, true); }
 };
 
@@ -424,20 +554,20 @@ async function selectRoute(label) {
         candidate_label: label,
       },
     });
-    unlock("s-session");
+    el("session-card").hidden = false;
     renderSession();
     routeLayer.clearLayers();
     L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
-    toast("Session created.");
+    toast("Route selected. Ready when you are.");
     refreshProgress();
   } catch (error) { toast(error.message, true); }
 }
 
 function renderSession() {
   el("session-out").innerHTML =
-    '<p style="margin:0 0 8px"><span class="pill">' + esc(session.status) + "</span> " +
-    '<span class="pill">' + (session.distance_m / 1000).toFixed(2) + " km</span> " +
-    '<span class="pill">' + esc(session.estimated_minutes) + " min</span></p>";
+    '<div class="chips" style="margin-bottom:12px"><span class="chip">' + esc(session.status) + "</span>" +
+    '<span class="chip">' + (session.distance_m / 1000).toFixed(2) + " km</span>" +
+    '<span class="chip">' + esc(session.estimated_minutes) + " min</span></div>";
   const terminal = session.status === "completed" || session.status === "abandoned";
   el("btn-complete").disabled = terminal;
   el("btn-abandon").disabled = terminal;
@@ -451,6 +581,7 @@ async function updateSession(status) {
     renderSession();
     toast("Session " + status + ".");
     refreshProgress();
+    if (status === "completed") showScreen("progress");
   } catch (error) { toast(error.message, true); }
 }
 
@@ -461,8 +592,7 @@ el("btn-abandon").onclick = () => updateSession("abandoned");
 // watchPosition fires on every new fix, which is what makes the map follow the
 // walker; getCurrentPosition would only ever give one snapshot. Positions stay
 // in the browser: the API is told the route that was selected and, later, that
-// the session finished, never a stream of where the user actually is. Anything
-// finer-grained would be a location history the product does not need.
+// the session finished, never a stream of where the user actually is.
 let watchId = null;
 let wakeLock = null;
 let followMode = true;
@@ -579,7 +709,7 @@ function startTracking() {
   el("btn-track").textContent = "Stop tracking";
   el("track-note").textContent =
     "Following you live. The dashed red line is where you have actually been; " +
-    "positions stay in this browser and are never sent to the server.";
+    "positions stay on this device and are never sent to the server.";
   renderTrackStats();
   elapsedTimer = setInterval(renderTrackStats, 1000);
   requestWakeLock();
