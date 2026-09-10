@@ -93,6 +93,30 @@ The options list states which provider produced the routes, so a synthetic
 `mock` route is never mistaken for a real street. `POST /route/options` returns
 the same information in its `provider` field.
 
+### Live tracking
+
+**Start activity** on a selected session switches the map to follow mode: it
+watches position continuously (`watchPosition`, not a one-off fix), moves a dot
+as the user moves, draws a dashed red breadcrumb of where they have actually
+been, and shows elapsed time, distance moved, pace and progress against the
+recommended duration. Panning the map by hand releases follow mode until
+**Recentre on me** is pressed.
+
+Two details worth knowing:
+
+- **Tracked positions never leave the browser.** The API is told which route was
+  selected and, later, that the session finished — not a stream of where the
+  user is. A continuous location history is not needed to compute progress, so
+  the product does not collect one.
+- **A web page cannot track in the background.** The Screen Wake Lock API keeps
+  the display awake while the page is visible, but locking the phone or
+  switching apps suspends updates. Genuine background tracking needs a native
+  app; this is a demo of the flow, not a field-logging tool.
+
+Fixes reported as worse than 50 m accurate are drawn but not counted towards
+distance, and steps under 1 m or over 200 m are discarded, so GPS jitter while
+standing still does not invent a kilometre.
+
 ### Handing a route to the phone's map app
 
 A selected session can leave the app two ways:

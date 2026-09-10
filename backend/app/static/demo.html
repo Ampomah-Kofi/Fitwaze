@@ -154,6 +154,11 @@
   <section id="s-session" data-locked="true">
     <h2>5 &middot; Session</h2>
     <div id="session-out"></div>
+    <button id="btn-track" style="margin-top:10px">Start activity</button>
+    <div id="track-out" class="stats" style="margin-top:10px" hidden></div>
+    <button id="btn-recentre" class="secondary" style="margin-top:8px" hidden>Recentre on me</button>
+    <p class="note" id="track-note"></p>
+
     <div class="handoff">
       <button id="btn-maps" class="secondary">Open in Maps</button>
       <button id="btn-gpx" class="secondary">Download GPX</button>
@@ -436,11 +441,13 @@ function renderSession() {
   const terminal = session.status === "completed" || session.status === "abandoned";
   el("btn-complete").disabled = terminal;
   el("btn-abandon").disabled = terminal;
+  el("btn-track").disabled = terminal;
 }
 
 async function updateSession(status) {
   try {
     session = await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status } });
+    stopTracking();
     renderSession();
     toast("Session " + status + ".");
     refreshProgress();
@@ -449,6 +456,151 @@ async function updateSession(status) {
 
 el("btn-complete").onclick = () => updateSession("completed");
 el("btn-abandon").onclick = () => updateSession("abandoned");
+
+// --- Live tracking ---------------------------------------------------------
+// watchPosition fires on every new fix, which is what makes the map follow the
+// walker; getCurrentPosition would only ever give one snapshot. Positions stay
+// in the browser: the API is told the route that was selected and, later, that
+// the session finished, never a stream of where the user actually is. Anything
+// finer-grained would be a location history the product does not need.
+let watchId = null;
+let wakeLock = null;
+let followMode = true;
+let trackStartedAt = null;
+let travelledMetres = 0;
+let lastFix = null;
+let meMarker = null;
+let travelledLine = null;
+let elapsedTimer = null;
+
+// Fixes worse than this are still drawn, but are not counted towards distance:
+// GPS noise while standing still otherwise accumulates a fictional kilometre.
+const ACCURACY_LIMIT_M = 50;
+
+function metresBetween(a, b) {
+  const R = 6371000;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(b[0] - a[0]);
+  const dLon = toRad(b[1] - a[1]);
+  const lat1 = toRad(a[0]);
+  const lat2 = toRad(b[0]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function renderTrackStats() {
+  const seconds = Math.round((Date.now() - trackStartedAt) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const target = recommendation ? recommendation.duration_minutes : 0;
+  const pace = travelledMetres > 50 && seconds > 0
+    ? ((seconds / 60) / (travelledMetres / 1000)).toFixed(1) + " min/km"
+    : "—";
+  const stat = (value, caption) =>
+    '<div class="stat"><b>' + value + "</b><span>" + caption + "</span></div>";
+
+  el("track-out").innerHTML =
+    stat(minutes + ":" + String(seconds % 60).padStart(2, "0"), "elapsed" + (target ? " of " + target + " min" : "")) +
+    stat((travelledMetres / 1000).toFixed(2) + " km", "distance moved") +
+    stat(pace, "pace") +
+    stat(Math.round(Math.min(100, target ? (seconds / 60 / target) * 100 : 0)) + "%", "of target time");
+}
+
+function onFix(position) {
+  const { latitude, longitude, accuracy } = position.coords;
+  const point = [latitude, longitude];
+
+  if (lastFix && accuracy <= ACCURACY_LIMIT_M) {
+    const step = metresBetween(lastFix, point);
+    // Ignore sub-metre jitter as well as impossible jumps between fixes.
+    if (step > 1 && step < 200) {
+      travelledMetres += step;
+      travelledLine.addLatLng(point);
+    }
+  } else if (!lastFix) {
+    travelledLine.addLatLng(point);
+  }
+  if (accuracy <= ACCURACY_LIMIT_M) lastFix = point;
+
+  if (meMarker) {
+    meMarker.setLatLng(point);
+  } else {
+    meMarker = L.circleMarker(point, {
+      radius: 7, color: "#fff", weight: 2, fillColor: "#1f6feb", fillOpacity: 1,
+    }).addTo(map);
+  }
+
+  if (followMode) map.panTo(point, { animate: true, duration: 0.5 });
+  renderTrackStats();
+}
+
+async function requestWakeLock() {
+  // Keeps the screen awake so tracking is not suspended mid-walk. Not available
+  // in every browser, and the OS can revoke it, so failure is non-fatal.
+  try {
+    if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+  } catch (error) {
+    wakeLock = null;
+  }
+}
+
+function stopTracking() {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  el("btn-track").textContent = "Start activity";
+  el("btn-recentre").hidden = true;
+}
+
+function startTracking() {
+  if (!navigator.geolocation) { toast("This browser has no geolocation support.", true); return; }
+  if (!window.isSecureContext) {
+    toast("Live tracking needs HTTPS or localhost.", true);
+    return;
+  }
+
+  followMode = true;
+  trackStartedAt = Date.now();
+  travelledMetres = 0;
+  lastFix = null;
+  if (travelledLine) travelledLine.remove();
+  travelledLine = L.polyline([], { color: "#b4232c", weight: 4, dashArray: "6 6" }).addTo(map);
+
+  watchId = navigator.geolocation.watchPosition(
+    onFix,
+    (error) => {
+      toast(error.code === 1 ? "Location permission denied." : "Lost your position.", true);
+      stopTracking();
+    },
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+  );
+
+  el("track-out").hidden = false;
+  el("btn-recentre").hidden = false;
+  el("btn-track").textContent = "Stop tracking";
+  el("track-note").textContent =
+    "Following you live. The dashed red line is where you have actually been; " +
+    "positions stay in this browser and are never sent to the server.";
+  renderTrackStats();
+  elapsedTimer = setInterval(renderTrackStats, 1000);
+  requestWakeLock();
+}
+
+el("btn-track").onclick = () => (watchId === null ? startTracking() : stopTracking());
+
+// Panning by hand means the user wants to look somewhere else; stop fighting
+// them for control of the viewport until they ask to be followed again.
+map.on("dragstart", () => { if (watchId !== null) followMode = false; });
+el("btn-recentre").onclick = () => {
+  followMode = true;
+  if (lastFix) map.setView(lastFix, 17);
+};
+
+// A backgrounded tab loses its wake lock; take it back when the user returns.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && watchId !== null && wakeLock === null) {
+    requestWakeLock();
+  }
+});
 
 // --- Handing the route to the phone's own map app --------------------------
 // Neither Apple Maps nor Google Maps can be given a path to follow: they route
