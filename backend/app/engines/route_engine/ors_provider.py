@@ -6,11 +6,13 @@ shape for the Directions API's "round trip" option, which is the natural fit
 for "give me N candidate loop/out-and-back routes starting near here":
 https://openrouteservice.org/dev/#/api-docs/v2/directions/{profile}/geojson/post
 
-IMPORTANT: this has not been exercised against the live ORS API in this
-environment (no network access / API key during development). It is
-implemented carefully against the documented request/response shape, but a
-real API key and a live smoke test are needed before relying on it in
-production — see the README's "Route Engine" section.
+IMPORTANT: this has never run against the live ORS API in this environment
+(no network access / API key during development). `tests/test_ors_provider.py`
+exercises the request shape and response parsing against a simulated service
+(`httpx.MockTransport`), which catches coordinate-order and error-handling
+mistakes — but it cannot catch a change at ORS's end. A real API key and a
+live smoke test are still needed before relying on this in production; see the
+README's "Map & route data" section.
 
 ORS does not return sidewalk/bike-lane/safety-style attributes, so those
 scoring inputs are left at a neutral placeholder value here. Enriching them
@@ -50,10 +52,18 @@ class ORSProviderError(RuntimeError):
 
 
 class ORSRouteProvider(RouteProvider):
-    def __init__(self, api_key: str | None = None, timeout_seconds: float = 10.0) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        timeout_seconds: float = 10.0,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
         settings = get_settings()
         self.api_key = api_key or settings.ors_api_key
         self.timeout_seconds = timeout_seconds
+        # Injectable so the test suite can exercise the request/response
+        # handling against a simulated ORS service without a key or network.
+        self.transport = transport
         if not self.api_key:
             raise ORSProviderError(
                 "ORS_API_KEY is not configured; set it in .env to use ROUTE_PROVIDER=ors"
@@ -81,7 +91,7 @@ class ORSRouteProvider(RouteProvider):
         ]
 
         routes: list[RawRoute] = []
-        with httpx.Client(timeout=self.timeout_seconds) as client:
+        with httpx.Client(timeout=self.timeout_seconds, transport=self.transport) as client:
             for label, distance_fraction, seed in shape_specs:
                 length_m = max(200.0, target_distance_m * distance_fraction)
                 try:

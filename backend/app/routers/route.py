@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.engines.route_engine import get_route_provider
 from app.engines.route_engine.base import RawRoute
+from app.engines.route_engine.cache import get_candidate_routes_cached
 from app.engines.route_engine.scoring import RouteScoreResult, score_and_rank_routes
 from app.models.activity import ActivityRecommendation
 from app.models.enums import SessionStatusEnum
@@ -65,8 +66,8 @@ def get_route_options(
         db, payload.activity_recommendation_id, current_user.id
     )
 
-    provider = get_route_provider()
-    raw_routes = provider.get_candidate_routes(
+    raw_routes = get_candidate_routes_cached(
+        get_route_provider(),
         start_lat=payload.latitude,
         start_lon=payload.longitude,
         activity_type=recommendation.activity_type,
@@ -116,8 +117,8 @@ def _get_own_session(db: Session, session_id: uuid.UUID, user_id) -> ActivitySes
 def _candidates_for(
     payload: RouteSelectRequest, recommendation: ActivityRecommendation
 ) -> list[tuple[RawRoute, RouteScoreResult]]:
-    provider = get_route_provider()
-    raw_routes = provider.get_candidate_routes(
+    raw_routes = get_candidate_routes_cached(
+        get_route_provider(),
         start_lat=payload.latitude,
         start_lon=payload.longitude,
         activity_type=recommendation.activity_type,

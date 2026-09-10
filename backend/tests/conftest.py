@@ -31,6 +31,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db import Base, get_db
+from app.engines.route_engine.cache import clear_route_cache
 from app.main import app
 from app.security.rate_limit import limiter
 
@@ -54,11 +55,12 @@ app.dependency_overrides[get_db] = _override_get_db
 
 @pytest.fixture(autouse=True)
 def _fresh_database():
-    """Recreate all tables before each test and reset the rate limiter so
-    tests don't leak state (or 429s) into one another."""
+    """Recreate all tables before each test and reset the rate limiter and
+    route cache so tests don't leak state (or 429s) into one another."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     limiter.reset()
+    clear_route_cache()
     yield
     Base.metadata.drop_all(bind=engine)
     engine.dispose()

@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # --- Route engine ---
     route_provider: str = Field(default="mock", alias="ROUTE_PROVIDER")
     ors_api_key: str = Field(default="", alias="ORS_API_KEY")
+    # How long generated candidate routes are reused for the same start point.
+    # Keeps a live provider inside its free-tier quota and keeps /route/select
+    # consistent with what /route/options showed. 0 disables caching.
+    route_cache_ttl_seconds: int = Field(
+        default=900, alias="ROUTE_CACHE_TTL_SECONDS"
+    )
 
     # --- CORS ---
     cors_origins: str = Field(

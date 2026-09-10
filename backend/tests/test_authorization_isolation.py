@@ -55,9 +55,17 @@ def test_user_a_token_cannot_be_used_after_tampering(client, two_users):
     """A token for user A, tampered with, must not resolve to user B (or
     anyone) — guards against naive "trust the payload" implementations."""
     user_a, _user_b = two_users
-    tampered_token = user_a["access_token"][:-1] + (
-        "A" if user_a["access_token"][-1] != "A" else "B"
-    )
+
+    # Tamper with the FIRST character of the signature, not the last: a
+    # 32-byte HMAC-SHA256 signature is 43 base64url characters, so its final
+    # character carries only 2 significant bits, and several distinct
+    # characters there decode to the very same signature bytes. Editing the
+    # last character therefore left a still-valid token about a quarter of
+    # the time, which made this test intermittently fail.
+    header, payload, signature = user_a["access_token"].split(".")
+    tampered_signature = ("A" if signature[0] != "A" else "B") + signature[1:]
+    tampered_token = f"{header}.{payload}.{tampered_signature}"
+
     resp = client.get("/auth/me", headers=auth_headers(tampered_token))
     assert resp.status_code == 401
 

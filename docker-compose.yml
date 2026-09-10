@@ -22,7 +22,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-      - .env
+      # Same file a local (non-Docker) run uses; see .env.example.
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg2://fitwaze:fitwaze@db:5432/fitwaze
     ports:

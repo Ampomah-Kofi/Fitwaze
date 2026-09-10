@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 
-from app.engines.route_engine.base import RawRoute
+from app.config import get_settings
+from app.engines.route_engine.base import RawRoute, RouteProvider
+from app.engines.route_engine.cache import clear_route_cache, get_candidate_routes_cached
 from app.engines.route_engine.mock_provider import MockRouteProvider
 from app.engines.route_engine.scoring import (
     CYCLE_WEIGHTS,
@@ -185,3 +187,78 @@ def test_mock_provider_routes_roughly_match_target_duration():
     routes = provider.get_candidate_routes(40.7128, -74.0060, ActivityTypeEnum.walk, target_minutes)
     for route in routes:
         assert 0.5 * target_minutes <= route.estimated_minutes <= 1.5 * target_minutes
+
+
+# --- Candidate route cache -------------------------------------------------
+
+
+class _CountingProvider(RouteProvider):
+    """Records how many times the provider was actually asked for routes."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self._inner = MockRouteProvider()
+
+    def get_candidate_routes(self, start_lat, start_lon, activity_type, target_duration_min):
+        self.calls += 1
+        return self._inner.get_candidate_routes(
+            start_lat=start_lat,
+            start_lon=start_lon,
+            activity_type=activity_type,
+            target_duration_min=target_duration_min,
+        )
+
+
+def _call(provider, lat=40.7128, lon=-74.0060, duration=30):
+    return get_candidate_routes_cached(
+        provider,
+        start_lat=lat,
+        start_lon=lon,
+        activity_type=ActivityTypeEnum.walk,
+        target_duration_min=duration,
+    )
+
+
+def test_cache_reuses_one_provider_call_for_a_repeated_request():
+    clear_route_cache()
+    provider = _CountingProvider()
+
+    first = _call(provider)
+    second = _call(provider)
+
+    assert provider.calls == 1
+    assert [r.label for r in first] == [r.label for r in second]
+
+
+def test_cache_treats_nearby_start_points_within_11m_as_the_same():
+    clear_route_cache()
+    provider = _CountingProvider()
+
+    _call(provider, lat=40.71280, lon=-74.00600)
+    _call(provider, lat=40.712801, lon=-74.006002)  # ~0.2 m away
+
+    assert provider.calls == 1
+
+
+def test_cache_separates_different_start_points_and_durations():
+    clear_route_cache()
+    provider = _CountingProvider()
+
+    _call(provider)
+    _call(provider, lat=51.5074, lon=-0.1278)  # different city
+    _call(provider, duration=45)  # different target duration
+
+    assert provider.calls == 3
+
+
+def test_cache_can_be_disabled_by_setting_ttl_to_zero(monkeypatch):
+    clear_route_cache()
+    provider = _CountingProvider()
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "route_cache_ttl_seconds", 0)
+
+    _call(provider)
+    _call(provider)
+
+    assert provider.calls == 2

@@ -15,6 +15,62 @@ later plug in real GIS/routing data via the `RouteProvider` interface described 
 > This section will be expanded with full setup instructions and a security verification
 > checklist as the build progresses.
 
+## Map & route data
+
+FitWaze needs map data in two places, and the whole stack below is free and
+needs no credit card — which is deliberate, since this build is an MVP/demo.
+
+### 1. Routing data (backend)
+
+This is what feeds `RouteProvider.get_candidate_routes()`. Two providers ship
+in the repo, selected with the `ROUTE_PROVIDER` environment variable:
+
+| `ROUTE_PROVIDER` | What it does | Cost |
+| --- | --- | --- |
+| `mock` (default) | Deterministic synthetic routes, no network calls, no key | Free, works offline |
+| `ors` | Real routes from OpenRouteService's round-trip Directions API | Free tier, ~2,000 requests/day |
+
+The `mock` provider is what the test suite exercises and is enough to demo the
+full flow offline. To use real routes:
+
+1. Sign up for a free key at <https://openrouteservice.org/dev/#/signup> (no
+   payment details required).
+2. Set `ROUTE_PROVIDER=ors` and `ORS_API_KEY=<your key>` in `backend/.env`.
+
+**Quota maths.** One `POST /route/options` costs three ORS requests (one per
+candidate shape), so a 2,000/day budget is roughly 660 route-option requests per
+day across all users. `ROUTE_CACHE_TTL_SECONDS` (default 900) caches candidates
+per rounded start point, activity and duration, which cuts repeat requests from
+the same spot to zero and also guarantees `POST /route/select` persists exactly
+the route the user was shown. If you outgrow the free tier, self-hosting ORS,
+GraphHopper or Valhalla against a regional OSM extract removes the limit
+entirely at no licence cost.
+
+> **Not yet verified against the live API.** `tests/test_ors_provider.py` runs
+> the provider against a simulated ORS service, so the request shape, the
+> `[lon, lat]` → `[lat, lon]` conversion and the failure handling are covered.
+> Nothing here has touched the real service though (no key or network access
+> during development), so smoke-test it with a real key before a live demo.
+
+### 2. Map rendering (frontend)
+
+The API returns geometry as ordered `[latitude, longitude]` pairs, which drop
+straight into **Leaflet** (`L.polyline`) or **MapLibre GL JS** — both open
+source, no API key, no usage billing. Tiles can come from OpenStreetMap's
+standard tile servers (mind their usage policy) or a self-hosted Protomaps
+file. **Nominatim** or **Photon** cover address search for the start point.
+
+Google Maps is deliberately *not* used here: its terms forbid persisting route
+geometry the way `activity_sessions.route_geometry` does, it has no round-trip
+routing, and even its free tier requires a billing account.
+
+### Attribution
+
+Routing data derives from OpenStreetMap, licensed under the
+[ODbL](https://www.openstreetmap.org/copyright). Any map view or published
+write-up must credit “© OpenStreetMap contributors”, and OpenRouteService asks
+to be credited alongside it.
+
 ## Tech stack
 
 - Python 3.12 + FastAPI, Pydantic v2
