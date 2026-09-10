@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FitWaze demo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1c2024;
+    --muted: #5f6b76;
+    --line: #dfe3e8;
+    --accent: #1f6feb;
+    --bad: #b4232c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #panel { width: 400px; flex: none; overflow-y: auto; padding: 16px; background: var(--panel); border-right: 1px solid var(--line); }
+  #map { flex: 1; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  .tagline { color: var(--muted); margin: 0 0 16px; font-size: 12px; }
+  section { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  section[data-locked="true"] { opacity: .45; pointer-events: none; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  input, select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; color: inherit; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  button { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .option { border: 1px solid var(--line); border-left-width: 5px; border-radius: 6px; padding: 10px; margin-bottom: 8px; }
+  .option h3 { margin: 0 0 4px; font-size: 14px; display: flex; justify-content: space-between; text-transform: capitalize; }
+  .option p { margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
+  .score { font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { background: var(--bg); border-radius: 6px; padding: 8px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  #status { position: fixed; bottom: 12px; left: 416px; background: var(--ink); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 60vw; }
+  #status.show { opacity: 1; }
+  #status.error { background: var(--bad); }
+  .pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+  .disclaimer { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1>FitWaze</h1>
+  <p class="tagline">PERSON + PLACE = PERSONALIZED PHYSICAL ACTIVITY</p>
+
+  <section id="s-account">
+    <h2>1 &middot; Account</h2>
+    <div class="grid">
+      <div><label for="email">Email</label><input id="email" type="email" autocomplete="username" /></div>
+      <div><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" /></div>
+    </div>
+    <div class="row">
+      <button id="btn-register">Register</button>
+      <button id="btn-login" class="secondary">Log in</button>
+    </div>
+    <p class="note" id="account-state">Not signed in.</p>
+  </section>
+
+  <section id="s-profile" data-locked="true">
+    <h2>2 &middot; Health profile</h2>
+    <div class="grid">
+      <div><label for="age">Age</label><input id="age" type="number" value="34" min="13" max="120" /></div>
+      <div><label for="sex">Sex</label><select id="sex">
+        <option value="female">Female</option><option value="male">Male</option>
+        <option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option>
+      </select></div>
+      <div><label for="goal">Goal</label><select id="goal">
+        <option value="general_fitness">General fitness</option>
+        <option value="weight_management">Weight management</option>
+        <option value="manage_prediabetes">Manage prediabetes</option>
+        <option value="manage_type2">Manage type 2 diabetes</option>
+      </select></div>
+      <div><label for="preferred_activity">Preference</label><select id="preferred_activity">
+        <option value="no_preference">No preference</option>
+        <option value="walk">Walk</option><option value="cycle">Cycle</option>
+      </select></div>
+      <div><label for="current_weekly_minutes">Weekly minutes now</label><input id="current_weekly_minutes" type="number" value="45" min="0" max="3000" /></div>
+      <div><label for="current_frequency">Sessions per week</label><input id="current_frequency" type="number" value="2" min="0" max="21" /></div>
+      <div><label for="height_cm">Height (cm)</label><input id="height_cm" type="number" value="165.5" step="0.1" /></div>
+      <div><label for="weight_kg">Weight (kg)</label><input id="weight_kg" type="number" value="68.2" step="0.1" /></div>
+      <div><label for="diabetes_status">Diabetes status</label><select id="diabetes_status">
+        <option value="none">None</option><option value="prediabetes">Prediabetes</option>
+        <option value="type2">Type 2</option><option value="prefer_not_to_say">Prefer not to say</option>
+      </select></div>
+      <div><label for="mobility_limitations">Mobility limitations</label><select id="mobility_limitations">
+        <option value="none">None</option><option value="mild">Mild</option>
+        <option value="moderate">Moderate</option><option value="severe">Severe</option>
+        <option value="prefer_not_to_say">Prefer not to say</option>
+      </select></div>
+      <div><label for="walking_ability">Walking ability</label><select id="walking_ability">
+        <option value="full">Full</option><option value="limited">Limited</option><option value="unable">Unable</option>
+      </select></div>
+      <div><label for="cycling_ability">Cycling ability</label><select id="cycling_ability">
+        <option value="full">Full</option><option value="limited">Limited</option><option value="unable">Unable</option>
+      </select></div>
+    </div>
+    <button id="btn-profile">Save profile</button>
+  </section>
+
+  <section id="s-recommendation" data-locked="true">
+    <h2>3 &middot; Activity Engine</h2>
+    <button id="btn-recommend">Get my recommendation</button>
+    <div id="recommendation-out"></div>
+  </section>
+
+  <section id="s-route" data-locked="true">
+    <h2>4 &middot; Route Engine</h2>
+    <p class="note" id="start-state">Click anywhere on the map to set your start point.</p>
+    <button id="btn-options" disabled>Generate route options</button>
+    <div id="options-out"></div>
+  </section>
+
+  <section id="s-session" data-locked="true">
+    <h2>5 &middot; Session</h2>
+    <div id="session-out"></div>
+    <div class="row">
+      <button id="btn-complete">Mark completed</button>
+      <button id="btn-abandon" class="secondary">Abandon</button>
+    </div>
+  </section>
+
+  <section id="s-progress" data-locked="true">
+    <h2>6 &middot; Progress</h2>
+    <div id="progress-out" class="stats"></div>
+    <button id="btn-progress" class="secondary" style="margin-top:8px">Refresh</button>
+  </section>
+
+  <p class="note">Map data &copy; OpenStreetMap contributors. Route geometry comes from
+    whichever <code>ROUTE_PROVIDER</code> the API is configured with.</p>
+</div>
+
+<div id="map"></div>
+<div id="status"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// The access token is held in a plain variable only, never localStorage, so it
+// does not outlive the tab and cannot be read back by anything else.
+let accessToken = null;
+let recommendation = null;
+let startPoint = null;
+let session = null;
+
+const RANK_COLORS = ["#1a7f4b", "#a8620a", "#5f6b76"];
+const el = (id) => document.getElementById(id);
+
+const map = L.map("map").setView([40.7128, -74.006], 14);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+}).addTo(map);
+
+let startMarker = null;
+const routeLayer = L.layerGroup().addTo(map);
+
+function toast(message, isError) {
+  const box = el("status");
+  box.textContent = message;
+  box.className = isError ? "show error" : "show";
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { box.className = ""; }, 3600);
+}
+
+function unlock(id) { el(id).dataset.locked = "false"; }
+
+// Escapes anything that came back from the API before it goes near innerHTML.
+// Rationale text is template-generated server-side, but the demo should not be
+// the one place that trusts a response body blindly.
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+async function api(path, options) {
+  const settings = options || {};
+  const headers = { "Content-Type": "application/json" };
+  if (accessToken) headers["Authorization"] = "Bearer " + accessToken;
+  const response = await fetch(path, {
+    method: settings.method || "GET",
+    headers: headers,
+    credentials: "same-origin",
+    body: settings.body ? JSON.stringify(settings.body) : undefined,
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const detail = data && data.detail ? JSON.stringify(data.detail) : response.statusText;
+    throw new Error(response.status + ": " + detail);
+  }
+  return data;
+}
+
+function profilePayload() {
+  const num = (id) => Number(el(id).value);
+  return {
+    age: num("age"),
+    sex: el("sex").value,
+    goal: el("goal").value,
+    preferred_activity: el("preferred_activity").value,
+    current_weekly_minutes: num("current_weekly_minutes"),
+    current_frequency: num("current_frequency"),
+    height_cm: num("height_cm"),
+    weight_kg: num("weight_kg"),
+    diabetes_status: el("diabetes_status").value,
+    mobility_limitations: el("mobility_limitations").value,
+    walking_ability: el("walking_ability").value,
+    cycling_ability: el("cycling_ability").value,
+  };
+}
+
+async function authenticate(path) {
+  const email = el("email").value.trim();
+  const password = el("password").value;
+  if (!email || !password) { toast("Email and password are required.", true); return; }
+  try {
+    const data = await api(path, { method: "POST", body: { email: email, password: password } });
+    accessToken = data.access_token;
+    el("account-state").textContent = "Signed in as " + data.user.email;
+    ["s-profile", "s-recommendation", "s-route", "s-progress"].forEach(unlock);
+    toast("Signed in.");
+    refreshProgress();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+el("btn-register").onclick = () => authenticate("/auth/register");
+el("btn-login").onclick = () => authenticate("/auth/login");
+
+el("btn-profile").onclick = async () => {
+  try {
+    await api("/profile", { method: "PUT", body: profilePayload() });
+    toast("Profile saved.");
+  } catch (error) { toast(error.message, true); }
+};
+
+el("btn-recommend").onclick = async () => {
+  try {
+    recommendation = await api("/activity/recommendation", { method: "POST" });
+    el("recommendation-out").innerHTML =
+      '<p style="margin:10px 0 4px"><b>' + esc(recommendation.activity_type) + " &middot; " +
+      esc(recommendation.duration_minutes) + ' minutes</b></p><p class="note">' +
+      esc(recommendation.rationale) + '</p><p class="disclaimer">' +
+      esc(recommendation.disclaimer) + "</p>";
+    el("btn-options").disabled = !startPoint;
+    toast("Recommendation ready.");
+  } catch (error) { toast(error.message, true); }
+};
+
+map.on("click", (event) => {
+  startPoint = { latitude: event.latlng.lat, longitude: event.latlng.lng };
+  if (startMarker) startMarker.remove();
+  startMarker = L.marker(event.latlng).addTo(map).bindPopup("Start point").openPopup();
+  el("start-state").textContent =
+    "Start point: " + startPoint.latitude.toFixed(4) + ", " + startPoint.longitude.toFixed(4);
+  el("btn-options").disabled = !recommendation;
+});
+
+function drawOptions(options) {
+  routeLayer.clearLayers();
+  const bounds = [];
+  options.forEach((option, index) => {
+    const line = L.polyline(option.geometry, {
+      color: RANK_COLORS[index] || RANK_COLORS[2],
+      weight: index === 0 ? 6 : 4,
+      opacity: index === 0 ? 0.95 : 0.6,
+    }).addTo(routeLayer);
+    line.bindTooltip(option.label.replace(/_/g, " ") + " &middot; score " + option.score);
+    option.geometry.forEach((point) => bounds.push(point));
+  });
+  if (bounds.length) map.fitBounds(L.latLngBounds(bounds).pad(0.2));
+}
+
+el("btn-options").onclick = async () => {
+  try {
+    const data = await api("/route/options", {
+      method: "POST",
+      body: {
+        activity_recommendation_id: recommendation.id,
+        latitude: startPoint.latitude,
+        longitude: startPoint.longitude,
+      },
+    });
+    drawOptions(data.options);
+
+    el("options-out").innerHTML = data.options.map((option, index) =>
+      '<div class="option" style="border-left-color:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '">' +
+      "<h3><span>" + esc(option.label.replace(/_/g, " ")) + '</span><span class="score">' +
+      esc(option.score) + "</span></h3>" +
+      '<p><span class="pill">' + (option.distance_m / 1000).toFixed(2) + " km</span> " +
+      '<span class="pill">' + Math.round(option.estimated_minutes) + " min</span></p>" +
+      "<p>" + esc(option.explanation) + "</p>" +
+      '<button data-select="' + esc(option.label) + '">Select this route</button></div>'
+    ).join("");
+
+    el("options-out").querySelectorAll("[data-select]").forEach((button) => {
+      button.onclick = () => selectRoute(button.dataset.select);
+    });
+    toast(data.options.length + " routes scored.");
+  } catch (error) { toast(error.message, true); }
+};
+
+async function selectRoute(label) {
+  try {
+    session = await api("/route/select", {
+      method: "POST",
+      body: {
+        activity_recommendation_id: recommendation.id,
+        latitude: startPoint.latitude,
+        longitude: startPoint.longitude,
+        candidate_label: label,
+      },
+    });
+    unlock("s-session");
+    renderSession();
+    routeLayer.clearLayers();
+    L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
+    toast("Session created.");
+    refreshProgress();
+  } catch (error) { toast(error.message, true); }
+}
+
+function renderSession() {
+  el("session-out").innerHTML =
+    '<p style="margin:0 0 8px"><span class="pill">' + esc(session.status) + "</span> " +
+    '<span class="pill">' + (session.distance_m / 1000).toFixed(2) + " km</span> " +
+    '<span class="pill">' + esc(session.estimated_minutes) + " min</span></p>";
+  const terminal = session.status === "completed" || session.status === "abandoned";
+  el("btn-complete").disabled = terminal;
+  el("btn-abandon").disabled = terminal;
+}
+
+async function updateSession(status) {
+  try {
+    session = await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status } });
+    renderSession();
+    toast("Session " + status + ".");
+    refreshProgress();
+  } catch (error) { toast(error.message, true); }
+}
+
+el("btn-complete").onclick = () => updateSession("completed");
+el("btn-abandon").onclick = () => updateSession("abandoned");
+
+async function refreshProgress() {
+  if (!accessToken) return;
+  try {
+    const progress = await api("/progress");
+    const stat = (value, caption) =>
+      '<div class="stat"><b>' + esc(value) + "</b><span>" + caption + "</span></div>";
+    el("progress-out").innerHTML =
+      stat(progress.sessions_completed + " / " + progress.sessions_selected, "sessions completed") +
+      stat(Math.round(progress.completion_rate * 100) + "%", "completion rate") +
+      stat((progress.total_distance_m / 1000).toFixed(2) + " km", "distance covered") +
+      stat(progress.total_active_minutes, "active minutes") +
+      stat(progress.last_7_days_minutes, "minutes, last 7 days") +
+      stat(progress.current_streak_days, "day streak");
+  } catch (error) { toast(error.message, true); }
+}
+
+el("btn-progress").onclick = refreshProgress;
+</script>
+</body>
+</html>

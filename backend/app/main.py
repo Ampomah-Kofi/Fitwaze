@@ -2,8 +2,11 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -64,3 +67,19 @@ app.include_router(profile_router.router)
 app.include_router(activity_router.router)
 app.include_router(route_router.router)
 app.include_router(progress_router.router)
+
+
+# --- Demo client -----------------------------------------------------------
+# A single-file Leaflet page that drives the whole flow (register -> profile ->
+# recommendation -> route options -> session -> progress) against this API.
+# Served from the API's own origin so the browser needs no CORS exemption, and
+# deliberately not exposed in production: it is a demonstration/QA aid, not a
+# product surface.
+DEMO_PAGE = Path(__file__).parent / "static" / "demo.html"
+
+
+@app.get("/demo", include_in_schema=False)
+def demo_page() -> FileResponse:
+    if settings.environment.lower() == "production" or not DEMO_PAGE.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return FileResponse(DEMO_PAGE, media_type="text/html")

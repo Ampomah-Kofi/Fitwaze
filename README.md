@@ -71,6 +71,31 @@ Routing data derives from OpenStreetMap, licensed under the
 write-up must credit “© OpenStreetMap contributors”, and OpenRouteService asks
 to be credited alongside it.
 
+## Demo client
+
+A single-file Leaflet page drives the whole flow — register, health profile,
+activity recommendation, route options on a map, session selection, completion
+and progress — against a running API:
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+# then open http://localhost:8000/demo
+```
+
+Register an account, save the profile, ask for a recommendation, then **click
+anywhere on the map** to set a start point and generate route options. The three
+candidates are drawn in rank order (green = best) with their score and
+explanation; selecting one persists a session you can then complete.
+
+The page is served from the API's own origin (so no CORS exemption is needed)
+and is not exposed when `ENVIRONMENT=production` — it is a demonstration and QA
+aid, not a product surface. It keeps its access token in a JavaScript variable
+for the life of the tab and never writes credentials to browser storage.
+
+With `ROUTE_PROVIDER=mock` this works fully offline, which makes it a safe bet
+for a live presentation; only the map tiles need the network.
+
 ## Tech stack
 
 - Python 3.12 + FastAPI, Pydantic v2

@@ -39,7 +39,11 @@ def _as_utc(value: datetime) -> datetime:
 def _current_streak_days(completed_dates: set[date], today: date) -> int:
     """Consecutive days, ending today or yesterday, with >=1 completed
     session. Allowing the streak to end yesterday means it isn't broken
-    simply because the user hasn't been out yet today."""
+    simply because the user hasn't been out yet today.
+
+    Days are bucketed in UTC, so a session completed late in the evening west
+    of Greenwich counts towards the next calendar day. Fixing that properly
+    needs the user's timezone, which the profile does not collect."""
     if today in completed_dates:
         cursor = today
     elif (today - timedelta(days=1)) in completed_dates:
@@ -60,7 +64,7 @@ def get_progress(
     db: Session = Depends(get_db),
 ) -> ProgressResponse:
     # Session volume per user is small (one row per selected route), so the
-    # aggregates are computed in Python rather than in SQL — this keeps the
+    # aggregates are computed in Python rather than in SQL â€” this keeps the
     # naive/aware timestamp handling below in one place and dialect-agnostic.
     sessions = list(
         db.scalars(
