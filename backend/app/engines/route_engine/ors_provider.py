@@ -117,6 +117,7 @@ class ORSRouteProvider(RouteProvider):
                         traffic_exposure=_NEUTRAL_ATTRIBUTE_VALUE,
                         major_crossings=_NEUTRAL_ATTRIBUTE_VALUE,
                         slope=_NEUTRAL_ATTRIBUTE_VALUE,
+                        stairs=_NEUTRAL_ATTRIBUTE_VALUE,
                         trail_bonus=_NEUTRAL_ATTRIBUTE_VALUE,
                         safety_score=_NEUTRAL_ATTRIBUTE_VALUE,
                         bike_lane_score=_NEUTRAL_ATTRIBUTE_VALUE,

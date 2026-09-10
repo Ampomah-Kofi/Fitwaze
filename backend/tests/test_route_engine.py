@@ -10,11 +10,15 @@ from app.engines.route_engine.cache import clear_route_cache, get_candidate_rout
 from app.engines.route_engine.mock_provider import MockRouteProvider
 from app.engines.route_engine.scoring import (
     CYCLE_WEIGHTS,
+    MOBILITY_EMPHASIS,
+    OLDER_ADULT_EMPHASIS,
     WALK_WEIGHTS,
+    personalised_weights,
     score_and_rank_routes,
     score_route,
+    terrain_emphasis,
 )
-from app.models.enums import ActivityTypeEnum
+from app.models.enums import ActivityTypeEnum, MobilityLimitationEnum
 
 
 def test_walk_weights_sum_to_one():
@@ -34,6 +38,7 @@ def _perfect_walk_route(estimated_minutes: float) -> RawRoute:
         traffic_exposure=0.0,
         major_crossings=0.0,
         slope=0.0,
+        stairs=0.0,
         trail_bonus=1.0,
         safety_score=1.0,
     )
@@ -48,6 +53,7 @@ def _worst_walk_route(estimated_minutes: float) -> RawRoute:
         traffic_exposure=1.0,
         major_crossings=1.0,
         slope=1.0,
+        stairs=1.0,
         trail_bonus=0.0,
         safety_score=0.0,
     )
@@ -262,3 +268,137 @@ def test_cache_can_be_disabled_by_setting_ttl_to_zero(monkeypatch):
     _call(provider)
 
     assert provider.calls == 2
+
+
+# --- Personalised scoring --------------------------------------------------
+
+
+def _profile(**overrides):
+    from app.schemas.profile import HealthProfileData
+
+    payload = {
+        "age": 34, "sex": "female", "goal": "general_fitness",
+        "preferred_activity": "walk", "current_weekly_minutes": 45,
+        "current_frequency": 2, "height_cm": 165.5, "weight_kg": 68.2,
+        "diabetes_status": "none", "mobility_limitations": "none",
+        "walking_ability": "full", "cycling_ability": "full",
+    }
+    payload.update(overrides)
+    return HealthProfileData(**payload)
+
+
+def _stepped_route():
+    """Short, pleasant, but full of stairs and hills."""
+    return RawRoute(
+        geometry=[(0.0, 0.0)], distance_m=1000.0, estimated_minutes=30,
+        sidewalk_score=1.0, traffic_exposure=0.0, major_crossings=0.0,
+        slope=0.9, stairs=1.0, trail_bonus=1.0, safety_score=1.0,
+    )
+
+
+def _flat_route():
+    """Duller and slightly off-target on duration, but step-free and flat."""
+    return RawRoute(
+        geometry=[(0.0, 0.0)], distance_m=1000.0, estimated_minutes=36,
+        sidewalk_score=0.8, traffic_exposure=0.2, major_crossings=0.2,
+        slope=0.05, stairs=0.0, trail_bonus=0.0, safety_score=0.8,
+    )
+
+
+def test_personalised_weights_still_sum_to_one():
+    for limitation in ("none", "mild", "moderate", "severe", "prefer_not_to_say"):
+        weights = personalised_weights(
+            ActivityTypeEnum.walk, _profile(mobility_limitations=limitation)
+        )
+        assert math.isclose(sum(weights.values()), 1.0, abs_tol=1e-9), limitation
+
+
+def test_terrain_weight_rises_with_mobility_limitation():
+    unrestricted = personalised_weights(ActivityTypeEnum.walk, _profile())
+    restricted = personalised_weights(
+        ActivityTypeEnum.walk, _profile(mobility_limitations="severe")
+    )
+    assert restricted["step_free"] > unrestricted["step_free"]
+    assert restricted["slope_inv"] > unrestricted["slope_inv"]
+    # Emphasis is relative: non-terrain factors give way rather than the score
+    # simply inflating.
+    assert restricted["duration_match"] < unrestricted["duration_match"]
+
+
+def test_a_stepped_route_outranks_a_flat_one_only_for_the_unrestricted_walker():
+    routes = [_stepped_route(), _flat_route()]
+
+    unrestricted = score_and_rank_routes(
+        routes, ActivityTypeEnum.walk, 30, profile=_profile()
+    )
+    assert unrestricted[0][0].stairs == 1.0  # duration match and trail win out
+
+    restricted = score_and_rank_routes(
+        routes, ActivityTypeEnum.walk, 30, profile=_profile(mobility_limitations="moderate")
+    )
+    assert restricted[0][0].stairs == 0.0  # the step-free route now wins
+
+
+def test_limited_walking_ability_emphasises_terrain_even_without_a_limitation():
+    baseline = personalised_weights(ActivityTypeEnum.walk, _profile())
+    limited = personalised_weights(
+        ActivityTypeEnum.walk, _profile(walking_ability="limited")
+    )
+    assert limited["step_free"] > baseline["step_free"]
+
+
+def test_cycling_ability_does_not_change_a_walking_score():
+    baseline = personalised_weights(ActivityTypeEnum.walk, _profile())
+    limited_cyclist = personalised_weights(
+        ActivityTypeEnum.walk, _profile(cycling_ability="limited")
+    )
+    assert limited_cyclist == baseline
+
+
+def test_older_walkers_get_some_terrain_emphasis():
+    assert terrain_emphasis(_profile(age=70), ActivityTypeEnum.walk) > 1.0
+    assert terrain_emphasis(_profile(age=40), ActivityTypeEnum.walk) == 1.0
+
+
+def test_emphasis_takes_the_strongest_signal_rather_than_compounding():
+    """An older walker who is also mildly limited must not be scored as though
+    they were severely limited."""
+    combined = terrain_emphasis(
+        _profile(age=70, mobility_limitations="mild"), ActivityTypeEnum.walk
+    )
+    assert combined == max(MOBILITY_EMPHASIS[MobilityLimitationEnum.mild], OLDER_ADULT_EMPHASIS)
+    assert combined < MOBILITY_EMPHASIS[MobilityLimitationEnum.severe]
+
+
+def test_an_undisclosed_limitation_is_treated_cautiously():
+    """Choosing not to disclose must not silently mean "no limitation"."""
+    assert terrain_emphasis(
+        _profile(mobility_limitations="prefer_not_to_say"), ActivityTypeEnum.walk
+    ) > 1.0
+
+
+def test_explanation_mentions_terrain_for_a_restricted_walker():
+    result = score_route(
+        _flat_route(), ActivityTypeEnum.walk, 30,
+        profile=_profile(mobility_limitations="moderate"),
+    )
+    assert "mobility needs" in result.explanation
+    assert "step-free" in result.explanation
+
+    # ...and says nothing of the sort for someone who reported no limitation.
+    generic = score_route(_flat_route(), ActivityTypeEnum.walk, 30, profile=_profile())
+    assert "mobility needs" not in generic.explanation
+
+
+def test_explanation_never_echoes_a_stored_health_value():
+    """Rationale text is shoulder-surfable; it must not read health data back."""
+    result = score_route(
+        _stepped_route(), ActivityTypeEnum.walk, 30,
+        profile=_profile(mobility_limitations="severe", age=71, weight_kg=94.0),
+    )
+    for leaked in ("severe", "71", "94"):
+        assert leaked not in result.explanation
+
+
+def test_scoring_without_a_profile_uses_the_generic_weights():
+    assert personalised_weights(ActivityTypeEnum.walk, None) == WALK_WEIGHTS

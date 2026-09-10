@@ -26,6 +26,7 @@ from app.engines.route_engine.cache import get_candidate_routes_cached
 from app.engines.route_engine.scoring import RouteScoreResult, score_and_rank_routes
 from app.models.activity import ActivityRecommendation
 from app.models.enums import SessionStatusEnum
+from app.models.profile import HealthProfile, profile_to_data
 from app.models.session import ActivitySession
 from app.models.user import User
 from app.schemas.route import (
@@ -77,7 +78,10 @@ def get_route_options(
     )
 
     ranked = score_and_rank_routes(
-        raw_routes, recommendation.activity_type, recommendation.duration_minutes
+        raw_routes,
+        recommendation.activity_type,
+        recommendation.duration_minutes,
+        profile=_profile_for(db, current_user.id),
     )
 
     options = [
@@ -117,8 +121,21 @@ def _get_own_session(db: Session, session_id: uuid.UUID, user_id) -> ActivitySes
     return session_row
 
 
+def _profile_for(db: Session, user_id):
+    """The caller's own health profile, used to personalise route scoring.
+
+    Scoring falls back to the generic weights when there is no profile row,
+    rather than failing: a recommendation cannot exist without a profile, but
+    the engine should not depend on that invariant holding.
+    """
+    profile = db.get(HealthProfile, user_id)
+    return profile_to_data(profile) if profile is not None else None
+
+
 def _candidates_for(
-    payload: RouteSelectRequest, recommendation: ActivityRecommendation
+    payload: RouteSelectRequest,
+    recommendation: ActivityRecommendation,
+    profile,
 ) -> list[tuple[RawRoute, RouteScoreResult]]:
     raw_routes = get_candidate_routes_cached(
         get_route_provider(),
@@ -128,7 +145,10 @@ def _candidates_for(
         target_duration_min=recommendation.duration_minutes,
     )
     return score_and_rank_routes(
-        raw_routes, recommendation.activity_type, recommendation.duration_minutes
+        raw_routes,
+        recommendation.activity_type,
+        recommendation.duration_minutes,
+        profile=profile,
     )
 
 
@@ -151,7 +171,9 @@ def select_route(
     chosen = next(
         (
             (route, result)
-            for route, result in _candidates_for(payload, recommendation)
+            for route, result in _candidates_for(
+                payload, recommendation, _profile_for(db, current_user.id)
+            )
             if route.label == payload.candidate_label
         ),
         None,

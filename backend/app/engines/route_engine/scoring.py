@@ -9,30 +9,62 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing import TYPE_CHECKING
+
 from app.engines.route_engine.base import RawRoute
-from app.models.enums import ActivityTypeEnum
+from app.models.enums import AbilityEnum, ActivityTypeEnum, MobilityLimitationEnum
+
+if TYPE_CHECKING:  # pragma: no cover - import only for type checking
+    from app.schemas.profile import HealthProfileData
 
 WALK_WEIGHTS: dict[str, float] = {
-    "duration_match": 0.25,
-    "sidewalk_score": 0.20,
-    "traffic_exposure_inv": 0.15,
-    "major_crossings_inv": 0.10,
-    "slope_inv": 0.10,
+    "duration_match": 0.22,
+    "sidewalk_score": 0.18,
+    "traffic_exposure_inv": 0.14,
+    "major_crossings_inv": 0.09,
+    "slope_inv": 0.09,
+    "step_free": 0.09,
     "trail_bonus": 0.10,
-    "safety_score": 0.10,
+    "safety_score": 0.09,
 }
 
 CYCLE_WEIGHTS: dict[str, float] = {
-    "duration_match": 0.25,
-    "bike_lane_score": 0.25,
-    "traffic_stress_inv": 0.20,
-    "intersection_complexity_inv": 0.10,
-    "slope_inv": 0.10,
+    "duration_match": 0.23,
+    "bike_lane_score": 0.23,
+    "traffic_stress_inv": 0.18,
+    "intersection_complexity_inv": 0.09,
+    "slope_inv": 0.09,
+    "step_free": 0.08,
     "continuity_score": 0.10,
 }
 
 assert abs(sum(WALK_WEIGHTS.values()) - 1.0) < 1e-9
 assert abs(sum(CYCLE_WEIGHTS.values()) - 1.0) < 1e-9
+
+# --- Personalisation -------------------------------------------------------
+# The same street is not the same route to two different people: a flight of
+# steps is a minor annoyance to one walker and a wall to another. These are the
+# factors whose weight rises when the person's profile says terrain matters
+# more to them, expressed as multipliers applied before renormalising so the
+# weights still sum to 1.0.
+TERRAIN_FACTORS = ("slope_inv", "step_free", "major_crossings_inv", "intersection_complexity_inv")
+
+# How strongly terrain is emphasised, by how constrained the person is. These
+# are product judgements, not clinical thresholds — they are deliberately
+# module-level and named so a physiotherapist or supervisor can argue with them.
+MOBILITY_EMPHASIS: dict[MobilityLimitationEnum, float] = {
+    MobilityLimitationEnum.none: 1.0,
+    MobilityLimitationEnum.mild: 1.6,
+    MobilityLimitationEnum.moderate: 2.4,
+    MobilityLimitationEnum.severe: 3.2,
+    # An unstated limitation is treated as a mild one: the cautious reading
+    # costs a fit walker very little and protects someone who chose not to say.
+    MobilityLimitationEnum.prefer_not_to_say: 1.6,
+}
+
+LIMITED_ABILITY_EMPHASIS = 1.8
+OLDER_ADULT_AGE = 65
+OLDER_ADULT_EMPHASIS = 1.3
 
 _WALK_FACTOR_DESCRIPTIONS = {
     "duration_match": "closely matches your target session length",
@@ -40,6 +72,7 @@ _WALK_FACTOR_DESCRIPTIONS = {
     "traffic_exposure_inv": "avoids heavy traffic exposure",
     "major_crossings_inv": "avoids major road crossings",
     "slope_inv": "stays relatively flat",
+    "step_free": "avoids steps and stairs",
     "trail_bonus": "uses a marked trail",
     "safety_score": "feels like a safe, well-used route",
 }
@@ -95,6 +128,7 @@ def _factor_values(route: RawRoute, activity_type: ActivityTypeEnum, target_dura
             "traffic_exposure_inv": 1.0 - route.traffic_exposure,
             "major_crossings_inv": 1.0 - route.major_crossings,
             "slope_inv": 1.0 - route.slope,
+            "step_free": 1.0 - route.stairs,
             "trail_bonus": route.trail_bonus,
             "safety_score": route.safety_score,
         }
@@ -105,12 +139,61 @@ def _factor_values(route: RawRoute, activity_type: ActivityTypeEnum, target_dura
         "traffic_stress_inv": 1.0 - route.traffic_stress,
         "intersection_complexity_inv": 1.0 - route.intersection_complexity,
         "slope_inv": 1.0 - route.slope,
+        "step_free": 1.0 - route.stairs,
         "continuity_score": route.continuity_score,
     }
 
 
 def _weights_for(activity_type: ActivityTypeEnum) -> dict[str, float]:
     return WALK_WEIGHTS if activity_type == ActivityTypeEnum.walk else CYCLE_WEIGHTS
+
+
+def terrain_emphasis(profile: "HealthProfileData | None", activity_type: ActivityTypeEnum) -> float:
+    """How much more this person's terrain factors should count, as a multiplier.
+
+    Driven by the mobility limitation they reported, the ability relevant to the
+    activity they are about to do, and age. The strongest applicable signal
+    wins rather than the factors multiplying together, so someone who is both
+    older and mildly limited is not scored as if they were severely limited.
+    """
+    if profile is None:
+        return 1.0
+
+    ability = (
+        profile.walking_ability
+        if activity_type == ActivityTypeEnum.walk
+        else profile.cycling_ability
+    )
+
+    candidates = [MOBILITY_EMPHASIS.get(profile.mobility_limitations, 1.0)]
+    if ability == AbilityEnum.limited:
+        candidates.append(LIMITED_ABILITY_EMPHASIS)
+    if profile.age >= OLDER_ADULT_AGE:
+        candidates.append(OLDER_ADULT_EMPHASIS)
+
+    return max(candidates)
+
+
+def personalised_weights(
+    activity_type: ActivityTypeEnum, profile: "HealthProfileData | None" = None
+) -> dict[str, float]:
+    """Base weights with terrain factors emphasised for this person.
+
+    Renormalised to sum to 1.0, so raising terrain weight lowers everything
+    else proportionally rather than inflating the score: two people comparing
+    the same route see numbers on the same 0-100 scale.
+    """
+    base = _weights_for(activity_type)
+    emphasis = terrain_emphasis(profile, activity_type)
+    if emphasis == 1.0:
+        return dict(base)
+
+    adjusted = {
+        name: weight * (emphasis if name in TERRAIN_FACTORS else 1.0)
+        for name, weight in base.items()
+    }
+    total = sum(adjusted.values())
+    return {name: weight / total for name, weight in adjusted.items()}
 
 
 def _generate_explanation(
@@ -146,22 +229,55 @@ def _generate_explanation(
 
 
 def score_route(
-    route: RawRoute, activity_type: ActivityTypeEnum, target_duration_min: float
+    route: RawRoute,
+    activity_type: ActivityTypeEnum,
+    target_duration_min: float,
+    profile: "HealthProfileData | None" = None,
 ) -> RouteScoreResult:
-    weights = _weights_for(activity_type)
+    """Score one route 0-100 for one person.
+
+    Passing `profile` is what makes this PERSON + PLACE rather than just PLACE:
+    the same street scores differently for a walker who cannot manage steps.
+    """
+    weights = personalised_weights(activity_type, profile)
     factor_values = _factor_values(route, activity_type, target_duration_min)
 
     weighted_score = sum(factor_values[name] * weight for name, weight in weights.items())
     score = round(weighted_score * 100, 1)
 
     explanation = _generate_explanation(activity_type, factor_values, weights)
+    if profile is not None and terrain_emphasis(profile, activity_type) > 1.0:
+        explanation += _terrain_note(factor_values)
 
     return RouteScoreResult(score=score, breakdown=factor_values, explanation=explanation)
 
 
+def _terrain_note(factor_values: dict[str, float]) -> str:
+    """One sentence saying how this route treats the terrain the person told us
+    matters to them — stated plainly, and never repeating a stored health value
+    back at them."""
+    steps_clear = factor_values.get("step_free", 1.0) >= 0.8
+    gentle = factor_values.get("slope_inv", 1.0) >= 0.7
+
+    if steps_clear and gentle:
+        return " Ranked with your mobility needs in mind: it is step-free and stays gentle underfoot."
+    if steps_clear:
+        return " Ranked with your mobility needs in mind: step-free, though it does have some gradient."
+    if gentle:
+        return " Ranked with your mobility needs in mind: gentle underfoot, but it does include steps."
+    return " Heads up: this one has both steps and noticeable gradient, which may not suit you."
+
+
 def score_and_rank_routes(
-    routes: list[RawRoute], activity_type: ActivityTypeEnum, target_duration_min: float, top_n: int = 3
+    routes: list[RawRoute],
+    activity_type: ActivityTypeEnum,
+    target_duration_min: float,
+    top_n: int = 3,
+    profile: "HealthProfileData | None" = None,
 ) -> list[tuple[RawRoute, RouteScoreResult]]:
-    scored = [(route, score_route(route, activity_type, target_duration_min)) for route in routes]
+    scored = [
+        (route, score_route(route, activity_type, target_duration_min, profile))
+        for route in routes
+    ]
     scored.sort(key=lambda pair: pair[1].score, reverse=True)
     return scored[:top_n]

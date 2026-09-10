@@ -33,6 +33,11 @@ class RawRoute:
     slope: float = 0.0
     trail_bonus: float = 0.0
     safety_score: float = 0.0
+    # Presence of steps/stairs along the route (OSM `highway=steps` and the
+    # like). Kept separate from `slope` because they are a different kind of
+    # obstacle: a hill is tiring, a flight of stairs can be impassable. 0.0
+    # means step-free, which is why it defaults there.
+    stairs: float = 0.0
 
     # --- cycling-relevant attributes (0-1 normalized) ---
     bike_lane_score: float = 0.0
