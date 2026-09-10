@@ -148,6 +148,65 @@
   }
   #status.show { opacity: .96; }
   #status.error { background: var(--bad); }
+
+  /* --- Motion -------------------------------------------------------------
+     Small, fast, and always tied to something the user did: a press that
+     answers immediately, a screen that arrives from somewhere, a card that
+     lands. Nothing decorative loops on its own. */
+  button, .option, .stat, input, select {
+    transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease,
+                background-color .18s ease, opacity .18s ease;
+  }
+  button:not(:disabled):active { transform: scale(.97); }
+  button:not(:disabled):hover { filter: brightness(1.04); }
+  #tabs button:not(:disabled):active { transform: scale(.92); }
+  input:focus, select:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(31, 111, 235, .14);
+  }
+
+  /* In-flight buttons show a spinner and hold their label, so the tap is
+     visibly acknowledged even on a slow connection. */
+  button.is-busy { position: relative; color: transparent !important; }
+  button.is-busy::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, .35); border-top-color: #fff;
+    animation: spin .6s linear infinite;
+  }
+  button.ghost.is-busy::after, button.quiet.is-busy::after, button.danger.is-busy::after {
+    border-color: rgba(31, 111, 235, .25); border-top-color: var(--accent);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .screen.active { animation: screen-in .26s cubic-bezier(.22, .61, .36, 1) both; }
+  @keyframes screen-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .option, .stat { animation: card-in .3s cubic-bezier(.22, .61, .36, 1) both; }
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(8px) scale(.99); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .option { cursor: pointer; }
+  .option:active { transform: scale(.99); }
+  .option.focused {
+    border-color: var(--accent);
+    box-shadow: 0 6px 18px rgba(31, 111, 235, .13);
+  }
+
+  #status { transform: translateY(6px); transition: opacity .2s ease, transform .2s ease; }
+  #status.show { transform: none; }
+
+  #track-out .stat b { transition: color .2s ease; }
+
+  /* Someone who has asked their OS for less motion gets none of it. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -298,15 +357,44 @@ let session = null;
 const RANK_COLORS = ["#1a7f4b", "#a8620a", "#64717f"];
 const el = (id) => document.getElementById(id);
 
-const map = L.map("map").setView([40.7128, -74.006], 14);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-}).addTo(map);
-
+// The map is built defensively. Leaflet comes from a CDN, and if that fails —
+// offline demo, blocked network, flaky conference wifi — an exception here
+// would abort the whole script before a single button was wired up, leaving a
+// page that looks fine and responds to nothing. Everything below therefore
+// treats `map` as optional, and the rest of the app keeps working without it.
+let map = null;
+let routeLayer = null;
 let startMarker = null;
 let accuracyCircle = null;
-const routeLayer = L.layerGroup().addTo(map);
+
+function initMap() {
+  if (typeof L === "undefined") {
+    el("map").innerHTML =
+      '<div style="padding:20px;font-size:13px;color:#64717f">Map library could not be ' +
+      "loaded, so the map is unavailable. Everything else still works.</div>";
+    return;
+  }
+  map = L.map("map").setView([40.7128, -74.006], 14);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+  routeLayer = L.layerGroup().addTo(map);
+
+  map.on("click", (event) => {
+    setStartPoint(event.latlng.lat, event.latlng.lng, null, "Start point");
+  });
+  // Panning by hand means the user wants to look somewhere else; stop fighting
+  // them for control of the viewport until they ask to be followed again.
+  map.on("dragstart", () => { if (watchId !== null) followMode = false; });
+}
+
+// Surface a thrown error instead of leaving the user tapping a dead screen.
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("error", (event) => {
+    toast("Something went wrong: " + (event.message || "unknown error"), true);
+  });
+}
 
 // --- App shell -------------------------------------------------------------
 function showScreen(name) {
@@ -320,7 +408,7 @@ function showScreen(name) {
   });
   // Leaflet measures its container on creation; a container that was hidden
   // then shown renders grey tiles until it is told to measure again.
-  if (name === "route") setTimeout(() => map.invalidateSize(), 60);
+  if (name === "route" && map) setTimeout(() => map.invalidateSize(), 60);
 }
 
 document.querySelectorAll("#tabs button").forEach((tab) => {
@@ -334,6 +422,27 @@ function tickClock() {
 }
 tickClock();
 setInterval(tickClock, 20000);
+
+initMap();
+
+// Every network-backed button runs through this: it disables while in flight
+// (so an impatient double-tap cannot fire two registrations), shows a spinner,
+// and always restores itself, including when the request fails.
+function busy(button, task) {
+  return async () => {
+    if (button.dataset.busy === "1") return;
+    button.dataset.busy = "1";
+    button.disabled = true;
+    button.classList.add("is-busy");
+    try {
+      await task();
+    } finally {
+      button.dataset.busy = "";
+      button.disabled = false;
+      button.classList.remove("is-busy");
+    }
+  };
+}
 
 function toast(message, isError) {
   const box = el("status");
@@ -404,17 +513,17 @@ async function authenticate(path) {
   }
 }
 
-el("btn-register").onclick = () => authenticate("/auth/register");
-el("btn-login").onclick = () => authenticate("/auth/login");
+el("btn-register").onclick = busy(el("btn-register"), () => authenticate("/auth/register"));
+el("btn-login").onclick = busy(el("btn-login"), () => authenticate("/auth/login"));
 
-el("btn-profile").onclick = async () => {
+el("btn-profile").onclick = busy(el("btn-profile"), async () => {
   try {
     await api("/profile", { method: "PUT", body: profilePayload() });
     toast("Profile saved.");
   } catch (error) { toast(error.message, true); }
-};
+});
 
-el("btn-recommend").onclick = async () => {
+el("btn-recommend").onclick = busy(el("btn-recommend"), async () => {
   try {
     recommendation = await api("/activity/recommendation", { method: "POST" });
     el("recommendation-out").innerHTML =
@@ -427,7 +536,7 @@ el("btn-recommend").onclick = async () => {
     el("btn-options").disabled = !startPoint;
     toast("Recommendation ready.");
   } catch (error) { toast(error.message, true); }
-};
+});
 
 function setStartPoint(lat, lon, accuracyMetres, label) {
   startPoint = { latitude: lat, longitude: lon };
@@ -435,11 +544,13 @@ function setStartPoint(lat, lon, accuracyMetres, label) {
   if (startMarker) startMarker.remove();
   if (accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
 
-  startMarker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
-  if (accuracyMetres) {
-    accuracyCircle = L.circle([lat, lon], {
-      radius: accuracyMetres, color: "#1f6feb", weight: 1, fillOpacity: 0.08,
-    }).addTo(map);
+  if (map) {
+    startMarker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
+    if (accuracyMetres) {
+      accuracyCircle = L.circle([lat, lon], {
+        radius: accuracyMetres, color: "#1f6feb", weight: 1, fillOpacity: 0.08,
+      }).addTo(map);
+    }
   }
 
   el("start-state").textContent =
@@ -447,10 +558,6 @@ function setStartPoint(lat, lon, accuracyMetres, label) {
     (accuracyMetres ? " (accurate to ~" + Math.round(accuracyMetres) + " m)" : "");
   el("btn-options").disabled = !recommendation;
 }
-
-map.on("click", (event) => {
-  setStartPoint(event.latlng.lat, event.latlng.lng, null, "Start point");
-});
 
 // Browser geolocation only works in a secure context: HTTPS, or localhost —
 // which is why the demo is served from the API's own origin on localhost. Over
@@ -474,7 +581,7 @@ el("btn-locate").onclick = () => {
   navigator.geolocation.getCurrentPosition(
     (position) => {
       const { latitude, longitude, accuracy } = position.coords;
-      map.setView([latitude, longitude], 16);
+      if (map) map.flyTo([latitude, longitude], 16, { duration: 0.8 });
       setStartPoint(latitude, longitude, accuracy, "Your location");
       toast("Located you to about " + Math.round(accuracy) + " m.");
       restore();
@@ -492,7 +599,11 @@ el("btn-locate").onclick = () => {
   );
 };
 
+let optionLines = [];
+
 function drawOptions(options) {
+  if (!map) return;
+  optionLines = [];
   routeLayer.clearLayers();
   const bounds = [];
   options.forEach((option, index) => {
@@ -502,12 +613,34 @@ function drawOptions(options) {
       opacity: index === 0 ? 0.95 : 0.6,
     }).addTo(routeLayer);
     line.bindTooltip(option.label.replace(/_/g, " ") + " · score " + option.score);
+    // Tapping the line is the same gesture as tapping its card.
+    line.on("click", () => focusOption(index));
+    optionLines.push(line);
     option.geometry.forEach((point) => bounds.push(point));
   });
-  if (bounds.length) map.fitBounds(L.latLngBounds(bounds).pad(0.2));
+  if (bounds.length) map.flyToBounds(L.latLngBounds(bounds).pad(0.2), { duration: 0.7 });
 }
 
-el("btn-options").onclick = async () => {
+// Tapping a route card brings that route forward on the map and fades the
+// others, so comparing three overlapping loops is possible at a glance.
+function focusOption(index) {
+  optionLines.forEach((line, i) => {
+    line.setStyle({
+      weight: i === index ? 7 : 3,
+      opacity: i === index ? 1 : 0.25,
+    });
+    if (i === index && line.bringToFront) line.bringToFront();
+  });
+  document.querySelectorAll(".option").forEach((card, i) => {
+    if (i === index) card.classList.add("focused");
+    else card.classList.remove("focused");
+  });
+  if (map && optionLines[index] && optionLines[index].getBounds) {
+    map.flyToBounds(optionLines[index].getBounds().pad(0.25), { duration: 0.5 });
+  }
+}
+
+el("btn-options").onclick = busy(el("btn-options"), async () => {
   try {
     const data = await api("/route/options", {
       method: "POST",
@@ -536,12 +669,20 @@ el("btn-options").onclick = async () => {
       '<button data-select="' + esc(option.label) + '">Choose this route</button></div>'
     ).join("");
 
-    el("options-out").querySelectorAll("[data-select]").forEach((button) => {
-      button.onclick = () => selectRoute(button.dataset.select);
+    el("options-out").querySelectorAll("[data-select]").forEach((button, index) => {
+      button.onclick = busy(button, () => selectRoute(button.dataset.select));
+      if (button.parentElement) {
+        // Tapping anywhere on the card focuses that route; only the button
+        // commits to it, so browsing the options never selects one by accident.
+        button.parentElement.onclick = (event) => {
+          if (event.target !== button) focusOption(index);
+        };
+      }
     });
+    focusOption(0);
     toast(data.options.length + " routes scored for you.");
   } catch (error) { toast(error.message, true); }
-};
+});
 
 async function selectRoute(label) {
   try {
@@ -556,8 +697,11 @@ async function selectRoute(label) {
     });
     el("session-card").hidden = false;
     renderSession();
-    routeLayer.clearLayers();
-    L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
+    if (map) {
+      optionLines = [];
+      routeLayer.clearLayers();
+      L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
+    }
     toast("Route selected. Ready when you are.");
     refreshProgress();
   } catch (error) { toast(error.message, true); }
@@ -585,8 +729,8 @@ async function updateSession(status) {
   } catch (error) { toast(error.message, true); }
 }
 
-el("btn-complete").onclick = () => updateSession("completed");
-el("btn-abandon").onclick = () => updateSession("abandoned");
+el("btn-complete").onclick = busy(el("btn-complete"), () => updateSession("completed"));
+el("btn-abandon").onclick = busy(el("btn-abandon"), () => updateSession("abandoned"));
 
 // --- Live tracking ---------------------------------------------------------
 // watchPosition fires on every new fix, which is what makes the map follow the
@@ -651,15 +795,16 @@ function onFix(position) {
   }
   if (accuracy <= ACCURACY_LIMIT_M) lastFix = point;
 
-  if (meMarker) {
-    meMarker.setLatLng(point);
-  } else {
-    meMarker = L.circleMarker(point, {
-      radius: 7, color: "#fff", weight: 2, fillColor: "#1f6feb", fillOpacity: 1,
-    }).addTo(map);
+  if (map) {
+    if (meMarker) {
+      meMarker.setLatLng(point);
+    } else {
+      meMarker = L.circleMarker(point, {
+        radius: 7, color: "#fff", weight: 2, fillColor: "#1f6feb", fillOpacity: 1,
+      }).addTo(map);
+    }
+    if (followMode) map.panTo(point, { animate: true, duration: 0.5 });
   }
-
-  if (followMode) map.panTo(point, { animate: true, duration: 0.5 });
   renderTrackStats();
 }
 
@@ -693,7 +838,9 @@ function startTracking() {
   travelledMetres = 0;
   lastFix = null;
   if (travelledLine) travelledLine.remove();
-  travelledLine = L.polyline([], { color: "#b4232c", weight: 4, dashArray: "6 6" }).addTo(map);
+  travelledLine = map
+    ? L.polyline([], { color: "#b4232c", weight: 4, dashArray: "6 6" }).addTo(map)
+    : { addLatLng() {}, remove() {} };
 
   watchId = navigator.geolocation.watchPosition(
     onFix,
@@ -717,12 +864,9 @@ function startTracking() {
 
 el("btn-track").onclick = () => (watchId === null ? startTracking() : stopTracking());
 
-// Panning by hand means the user wants to look somewhere else; stop fighting
-// them for control of the viewport until they ask to be followed again.
-map.on("dragstart", () => { if (watchId !== null) followMode = false; });
 el("btn-recentre").onclick = () => {
   followMode = true;
-  if (lastFix) map.setView(lastFix, 17);
+  if (lastFix && map) map.flyTo(lastFix, 17, { duration: 0.6 });
 };
 
 // A backgrounded tab loses its wake lock; take it back when the user returns.
@@ -796,7 +940,7 @@ el("btn-maps").onclick = () => {
   window.open(handoff.url, "_blank", "noopener");
 };
 
-el("btn-gpx").onclick = async () => {
+el("btn-gpx").onclick = busy(el("btn-gpx"), async () => {
   if (!session) return;
   try {
     // Fetched rather than linked, because the endpoint needs the bearer token.
@@ -816,7 +960,7 @@ el("btn-gpx").onclick = async () => {
     el("handoff-note").textContent =
       "GPX holds the exact route. Open it in OsmAnd, Komoot, Strava or any GIS tool.";
   } catch (error) { toast(error.message, true); }
-};
+});
 
 async function refreshProgress() {
   if (!accessToken) return;
@@ -834,7 +978,7 @@ async function refreshProgress() {
   } catch (error) { toast(error.message, true); }
 }
 
-el("btn-progress").onclick = refreshProgress;
+el("btn-progress").onclick = busy(el("btn-progress"), refreshProgress);
 </script>
 </body>
 </html>
