@@ -23,6 +23,7 @@ class RouteOptionsRequest(BaseModel):
 
 
 class RouteOptionSchema(BaseModel):
+    candidate_revision: str
     label: CandidateLabel
     distance_m: float
     estimated_minutes: float
@@ -55,6 +56,8 @@ class RouteOptionsResponse(BaseModel):
 
 
 class RouteSelectRequest(BaseModel):
+    # New clients echo this to detect routes changed after cache expiry/restart.
+    candidate_revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     activity_recommendation_id: uuid.UUID
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)

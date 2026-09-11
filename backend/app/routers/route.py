@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+import hashlib
+import json
+from dataclasses import asdict
 from datetime import datetime, timezone
 from xml.sax.saxutils import escape
 
@@ -21,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.engines.route_engine import get_route_provider
-from app.engines.route_engine.base import RawRoute
+from app.engines.route_engine.base import RawRoute, RouteProviderError
 from app.engines.route_engine.scoring import RouteSelection
 from app.engines.route_engine.cache import get_candidate_routes_cached
 from app.engines.route_engine.scoring import RouteScoreResult, feasibility_problem, select_routes
@@ -50,6 +53,19 @@ logger = logging.getLogger(__name__)
 _STORED_COORD_PRECISION = 4
 
 
+def _candidate_revision(route: RawRoute) -> str:
+    data = asdict(route)
+    data["unknown_attributes"] = sorted(route.unknown_attributes)
+    return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _load_candidates(**kwargs) -> list[RawRoute]:
+    try:
+        return get_candidate_routes_cached(get_route_provider(), **kwargs)
+    except RouteProviderError as exc:
+        raise HTTPException(status_code=503, detail="Routing is temporarily unavailable for this start point. Try another location or try again later.") from exc
+
+
 def _get_own_recommendation(
     db: Session, recommendation_id, user_id
 ) -> ActivityRecommendation:
@@ -71,8 +87,7 @@ def get_route_options(
         db, payload.activity_recommendation_id, current_user.id
     )
 
-    raw_routes = get_candidate_routes_cached(
-        get_route_provider(),
+    raw_routes = _load_candidates(
         start_lat=payload.latitude,
         start_lon=payload.longitude,
         activity_type=recommendation.activity_type,
@@ -88,6 +103,7 @@ def get_route_options(
 
     options = [
         RouteOptionSchema(
+            candidate_revision=_candidate_revision(route),
             label=route.label,
             distance_m=route.distance_m,
             estimated_minutes=route.estimated_minutes,
@@ -144,8 +160,7 @@ def _candidates_for(
     recommendation: ActivityRecommendation,
     profile,
 ) -> "RouteSelection":
-    raw_routes = get_candidate_routes_cached(
-        get_route_provider(),
+    raw_routes = _load_candidates(
         start_lat=payload.latitude,
         start_lon=payload.longitude,
         activity_type=recommendation.activity_type,
@@ -203,6 +218,8 @@ def select_route(
             detail="That route option is not available for this recommendation and start point",
         )
     route, result = chosen
+    if payload.candidate_revision is not None and payload.candidate_revision != _candidate_revision(route):
+        raise HTTPException(status_code=409, detail="This route option has changed. Find routes again before selecting it.")
 
     session_row = ActivitySession(
         user_id=current_user.id,

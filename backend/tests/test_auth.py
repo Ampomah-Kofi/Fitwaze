@@ -159,10 +159,39 @@ def test_logout_revokes_refresh_token(client):
 
     logout_resp = client.post("/auth/logout")
     assert logout_resp.status_code == 204
+    assert logout_resp.content == b""
+    assert "fitwaze_refresh_token" not in client.cookies
 
     # Cookie should be cleared / refresh should now fail.
     refresh_resp = client.post("/auth/refresh")
     assert refresh_resp.status_code == 401
+
+
+def test_invalid_refresh_clears_browser_cookie(client):
+    client.cookies.set("fitwaze_refresh_token", "invalid", domain="testserver.local", path="/")
+    resp = client.post("/auth/refresh")
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid refresh token"
+    assert "fitwaze_refresh_token" not in client.cookies
+
+
+def test_reused_refresh_clears_browser_cookie(client):
+    client.post("/auth/register", json={"email": unique_email(), "password": STRONG_PASSWORD})
+    old_token = client.cookies.get("fitwaze_refresh_token")
+    assert client.post("/auth/refresh").status_code == 200
+    client.cookies.set("fitwaze_refresh_token", old_token, domain="testserver.local", path="/")
+    resp = client.post("/auth/refresh")
+    assert resp.status_code == 401
+    assert "reuse detected" in resp.json()["detail"]
+    assert "fitwaze_refresh_token" not in client.cookies
+
+
+def test_logout_revoked_token_cannot_be_replayed(client):
+    client.post("/auth/register", json={"email": unique_email(), "password": STRONG_PASSWORD})
+    token = client.cookies.get("fitwaze_refresh_token")
+    assert client.post("/auth/logout").status_code == 204
+    client.cookies.set("fitwaze_refresh_token", token, domain="testserver.local", path="/")
+    assert client.post("/auth/refresh").status_code == 401
 
 
 def test_auth_login_rate_limited_after_threshold(client):

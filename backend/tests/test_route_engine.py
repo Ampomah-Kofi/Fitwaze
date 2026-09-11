@@ -12,6 +12,10 @@ from app.engines.route_engine.cache import clear_route_cache, get_candidate_rout
 from app.engines.route_engine.mock_provider import MockRouteProvider
 from app.engines.route_engine.scoring import (
     CYCLE_WEIGHTS,
+    _CYCLE_FACTOR_DESCRIPTIONS,
+    _WALK_FACTOR_DESCRIPTIONS,
+    _factor_values,
+    _generate_explanation,
     MOBILITY_EMPHASIS,
     OLDER_ADULT_EMPHASIS,
     WALK_WEIGHTS,
@@ -543,3 +547,98 @@ def test_returns_to_start_tolerates_a_short_snap_to_the_nearest_path():
         distance_m=900.0, estimated_minutes=11, label="snapped",
     )
     assert returns_to_start(snapped, 5.6037, -0.1870)
+
+
+def test_cycling_explanation_handles_step_free_as_the_strongest_factor():
+    route = RawRoute([(0, 0)], 1000, 30, stairs=0, slope=1,
+                     traffic_stress=1, intersection_complexity=1)
+    result = score_route(route, ActivityTypeEnum.cycle, 30,
+                         profile=_profile(mobility_limitations="severe"))
+    assert "avoids steps" in result.explanation
+
+
+def test_unknown_terrain_does_not_generate_accessibility_claims():
+    route = _flat_route()
+    route.unknown_attributes = frozenset({"stairs", "slope", "sidewalk_score", "safety_score"})
+    result = score_route(route, ActivityTypeEnum.walk, 30,
+                         profile=_profile(mobility_limitations="severe"))
+    assert "cannot be confirmed" in result.explanation
+    assert "step-free" not in result.explanation
+    assert "good sidewalk" not in result.explanation
+
+
+@pytest.mark.parametrize("activity,field", [(ActivityTypeEnum.walk, "walking_ability"), (ActivityTypeEnum.cycle, "cycling_ability")])
+def test_updated_unable_ability_withholds_existing_recommendation_routes(activity, field):
+    selection = select_routes([_flat_route()], activity, 30, _profile(**{field: "unable"}))
+    assert not selection.ranked
+    assert "unable" in selection.excluded[0].reason
+
+
+@pytest.mark.parametrize("ttl", [0, 900])
+def test_cache_rejects_one_way_provider_results_even_when_disabled(monkeypatch, ttl):
+    from app.config import get_settings
+    from app.engines.route_engine.base import RouteProviderError
+    provider = _CountingProvider()
+    monkeypatch.setattr(get_settings(), "route_cache_ttl_seconds", ttl)
+    monkeypatch.setattr(provider, "get_candidate_routes", lambda **kwargs: [
+        RawRoute([(40.7128, -74.006), (40.72, -74.006), (40.73, -74.006)], 2000, 30)
+    ])
+    with pytest.raises(RouteProviderError):
+        _call(provider)
+
+
+# --- Factor / weight / wording consistency ---------------------------------
+# A factor that exists in one of these dicts but not the others once took the
+# API down with a KeyError mid-request. Scoring now degrades instead of raising,
+# so these tests are what actually catches the mistake.
+
+
+@pytest.mark.parametrize(
+    "activity,weights",
+    [(ActivityTypeEnum.walk, WALK_WEIGHTS), (ActivityTypeEnum.cycle, CYCLE_WEIGHTS)],
+)
+def test_every_scored_factor_has_a_weight(activity, weights):
+    route = RawRoute(geometry=[(0.0, 0.0)], distance_m=1000.0, estimated_minutes=30)
+    factors = set(_factor_values(route, activity, 30))
+    assert factors == set(weights), (
+        f"{activity.value}: factors and weights disagree — "
+        f"missing weights {factors - set(weights)}, unused weights {set(weights) - factors}"
+    )
+
+
+@pytest.mark.parametrize(
+    "activity,descriptions",
+    [
+        (ActivityTypeEnum.walk, _WALK_FACTOR_DESCRIPTIONS),
+        (ActivityTypeEnum.cycle, _CYCLE_FACTOR_DESCRIPTIONS),
+    ],
+)
+def test_every_scored_factor_has_wording(activity, descriptions):
+    route = RawRoute(geometry=[(0.0, 0.0)], distance_m=1000.0, estimated_minutes=30)
+    factors = set(_factor_values(route, activity, 30))
+    assert factors <= set(descriptions), (
+        f"{activity.value}: no explanation wording for {factors - set(descriptions)}"
+    )
+
+
+def test_an_unweighted_factor_does_not_take_the_request_down():
+    """Degrade, don't raise: a stray factor must not 500 someone's walk."""
+    explanation = _generate_explanation(
+        ActivityTypeEnum.walk,
+        {"duration_match": 1.0, "sidewalk_score": 0.9, "brand_new_factor": 0.95},
+        dict(WALK_WEIGHTS),
+    )
+    assert explanation
+    assert "brand_new_factor" not in explanation
+
+
+@pytest.mark.parametrize("activity", [ActivityTypeEnum.walk, ActivityTypeEnum.cycle])
+def test_scoring_produces_an_explanation_for_both_activities(activity):
+    route = RawRoute(
+        geometry=[(0.0, 0.0)], distance_m=1000.0, estimated_minutes=30,
+        sidewalk_score=0.8, slope=0.2, stairs=0.1, safety_score=0.8,
+        bike_lane_score=0.7, traffic_stress=0.3, continuity_score=0.8,
+    )
+    result = score_route(route, activity, 30)
+    assert result.explanation
+    assert 0 <= result.score <= 100

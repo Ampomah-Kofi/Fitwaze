@@ -6,6 +6,44 @@ import pytest
 from tests.conftest import auth_headers, register_and_login, valid_profile_payload
 
 
+def test_changed_candidate_is_not_silently_selected(client, monkeypatch):
+    from app.engines.route_engine.cache import clear_route_cache
+    from app.engines.route_engine.mock_provider import MockRouteProvider
+    user = register_and_login(client)
+    headers = auth_headers(user["access_token"])
+    request = {"activity_recommendation_id": _create_recommendation(client, user["access_token"]),
+               "latitude": 40.7128, "longitude": -74.006}
+    option = client.post("/route/options", json=request, headers=headers).json()["options"][0]
+    original = MockRouteProvider.get_candidate_routes
+    def changed(self, **kwargs):
+        routes = original(self, **kwargs)
+        for route in routes:
+            route.distance_m += 100
+        return routes
+    clear_route_cache()
+    monkeypatch.setattr(MockRouteProvider, "get_candidate_routes", changed)
+    response = client.post("/route/select", json={**request, "candidate_label": option["label"],
+                           "candidate_revision": option["candidate_revision"]}, headers=headers)
+    assert response.status_code == 409
+    assert "changed" in response.json()["detail"]
+
+
+def test_routing_provider_failure_has_actionable_response(client, monkeypatch):
+    import app.routers.route as router
+    from app.engines.route_engine.base import RouteProviderError
+    user = register_and_login(client)
+    recommendation_id = _create_recommendation(client, user["access_token"])
+    def fail():
+        raise RouteProviderError("private upstream details")
+    monkeypatch.setattr(router, "get_route_provider", fail)
+    for endpoint in ("options", "select"):
+        response = client.post("/route/" + endpoint, headers=auth_headers(user["access_token"]),
+            json={"activity_recommendation_id": recommendation_id, "latitude": 40.7128,
+                  "longitude": -74.006, "candidate_label": "small_loop"})
+        assert response.status_code == 503
+        assert "private" not in response.text
+
+
 def _create_recommendation(client, token: str) -> str:
     client.put("/profile", json=valid_profile_payload(), headers=auth_headers(token))
     resp = client.post("/activity/recommendation", headers=auth_headers(token))

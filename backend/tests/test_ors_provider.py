@@ -139,3 +139,31 @@ def test_ors_provider_raises_on_an_unexpected_response_shape():
 def test_ors_provider_refuses_to_start_without_an_api_key():
     with pytest.raises(ORSProviderError):
         ORSRouteProvider(api_key="")
+
+
+@pytest.mark.parametrize("broken", [
+    {"features": [{}]},
+    {"features": [{"geometry": {"type": "LineString", "coordinates": []}, "properties": {"segments": []}}]},
+    {"features": None},
+    None,
+])
+def test_malformed_ors_candidate_does_not_discard_other_candidates(broken):
+    responses = iter([httpx.Response(200, json=broken), _ors_response(), _ors_response()])
+    provider = ORSRouteProvider(api_key="test", transport=httpx.MockTransport(lambda request: next(responses)))
+    routes = provider.get_candidate_routes(40.7128, -74.006, ActivityTypeEnum.walk, 30)
+    assert len(routes) == 2
+
+
+def test_ors_accepts_elevation_coordinate_and_rejects_non_finite_distance():
+    from copy import deepcopy
+    elevated = deepcopy(_ORS_FEATURE)
+    for point in elevated["geometry"]["coordinates"]:
+        point.append(10)
+    malformed = deepcopy(_ORS_FEATURE)
+    malformed["properties"]["segments"][0]["distance"] = "nan"
+    responses = iter([_ors_response(payload={"features": [malformed]}),
+                      _ors_response(payload={"features": [elevated]}), _ors_response()])
+    provider = ORSRouteProvider(api_key="test", transport=httpx.MockTransport(lambda request: next(responses)))
+    routes = provider.get_candidate_routes(40.7128, -74.006, ActivityTypeEnum.walk, 30)
+    assert len(routes) == 2
+    assert routes[0].geometry[0] == (40.7128, -74.006)

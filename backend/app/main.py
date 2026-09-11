@@ -78,7 +78,9 @@ app.include_router(progress_router.router)
 DEMO_PAGE = Path(__file__).parent / "static" / "demo.html"
 
 
+@app.get("/", include_in_schema=False)
 @app.get("/demo", include_in_schema=False)
+@app.get("/mobile", include_in_schema=False)
 def demo_page() -> FileResponse:
     if settings.environment.lower() == "production" or not DEMO_PAGE.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

@@ -25,3 +25,27 @@ def test_recommendation_created_after_profile_exists(client):
 def test_recommendation_requires_authentication(client):
     resp = client.post("/activity/recommendation")
     assert resp.status_code == 401
+
+
+def test_user_can_choose_cycling_and_receive_cycling_routes(client):
+    user = register_and_login(client)
+    headers = auth_headers(user["access_token"])
+    client.put("/profile", json=valid_profile_payload(preferred_activity="walk"), headers=headers)
+    response = client.post("/activity/recommendation", json={"activity_type": "cycle"}, headers=headers)
+    assert response.status_code == 200
+    recommendation = response.json()
+    assert recommendation["activity_type"] == "cycle"
+    routes = client.post("/route/options", json={"activity_recommendation_id": recommendation["id"],
+                                                "latitude": 40.7128, "longitude": -74.006}, headers=headers)
+    assert routes.status_code == 200
+    assert routes.json()["activity_type"] == "cycle"
+    assert routes.json()["options"]
+    assert client.get("/profile", headers=headers).json()["preferred_activity"] == "walk"
+
+
+def test_unavailable_session_choice_is_rejected(client):
+    user = register_and_login(client)
+    headers = auth_headers(user["access_token"])
+    client.put("/profile", json=valid_profile_payload(cycling_ability="unable"), headers=headers)
+    response = client.post("/activity/recommendation", json={"activity_type": "cycle"}, headers=headers)
+    assert response.status_code == 409

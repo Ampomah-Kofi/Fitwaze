@@ -11,9 +11,11 @@ This repository currently contains the backend API only. A Geography department 
 later plug in real GIS/routing data via the `RouteProvider` interface described in
 `backend/app/engines/route_engine/base.py`.
 
-> Status: work in progress, built incrementally per the approved implementation plan.
-> This section will be expanded with full setup instructions and a security verification
-> checklist as the build progresses.
+> Status: working backend MVP with a browser demo and an automated test suite.
+> See Quick start below to run it locally.
+
+The agreed product direction and demo acceptance flow are recorded in
+[the product brief](docs/PRODUCT_BRIEF.md).
 
 ## Map & route data
 
@@ -40,9 +42,11 @@ full flow offline. To use real routes:
 **Quota maths.** One `POST /route/options` costs three ORS requests (one per
 candidate shape), so a 2,000/day budget is roughly 660 route-option requests per
 day across all users. `ROUTE_CACHE_TTL_SECONDS` (default 900) caches candidates
-per rounded start point, activity and duration, which cuts repeat requests from
-the same spot to zero and also guarantees `POST /route/select` persists exactly
-the route the user was shown. If you outgrow the free tier, self-hosting ORS,
+per rounded start point, activity and duration, which reduces repeat requests.
+The demo echoes each option's `candidate_revision` when selecting it; if cache
+expiry, a restart, or another worker produces a changed candidate, selection
+returns 409 and asks the user to fetch routes again. Other clients should also
+send this optional field to get the same protection. If you outgrow the free tier, self-hosting ORS,
 GraphHopper or Valhalla against a regional OSM extract removes the limit
 entirely at no licence cost.
 
@@ -73,8 +77,8 @@ to be credited alongside it.
 
 ## Demo client
 
-A single-file page simulating the mobile app: a phone frame on a desktop screen,
-full-screen on a handset, with a bottom tab bar (Today / Route / Progress). It
+A mobile interface with a full-screen handset layout and bottom navigation
+(Today / Route / Progress). Larger screens show the same app at phone width. It
 drives the whole flow — register, health profile, activity recommendation, route
 options on a map, live tracking, session completion and progress — against a
 running API:
@@ -89,6 +93,24 @@ start point — either **Use my current location** (browser geolocation, shown
 with its accuracy radius) or by **clicking anywhere on the map** — and generate
 route options. The three candidates are drawn in rank order (green = best) with
 their score and explanation; selecting one persists a session you can complete.
+
+Use **For this session** to accept the engine's choice or request walking or
+cycling. The engine recalculates the recommendation using the saved profile
+and refuses activities reported as unavailable. **Enter another starting
+location** accepts latitude/longitude when GPS or map clicking is inconvenient.
+
+Each route also offers **Try a simulated journey**. After selecting that mode,
+tap **Start simulation**: the marker follows the chosen geometry in roughly
+20 seconds without GPS. **Finish** adds a completion to the separate demo
+progress area for the current tab. Simulation does not write an activity
+session or contribute to real progress totals.
+
+Open [FitWaze](http://localhost:8000/) for the mobile interface. `/demo` and
+`/mobile` serve the same app. It uses a compact welcome screen, a collapsible
+profile, fixed bottom navigation, and **Map & start point / Routes & activity**
+controls. There is no desktop-layout mode. On a phone,
+open the server's reachable address rather than `localhost`
+(which refers to the phone itself). Location and tracking require HTTPS there.
 
 The options list states which provider produced the routes, so a synthetic
 `mock` route is never mistaken for a real street. `POST /route/options` returns
@@ -123,8 +145,9 @@ Every candidate begins and ends at the user's own start point. This is part of
 the `RouteProvider` contract, not an accident of the mock: FitWaze recommends
 activity from wherever someone happens to be, so a one-way route would strand
 them at the far end with a journey home nobody costed. `returns_to_start()`
-checks it, and the API logs a warning naming any provider that breaks it —
-worth knowing about when the Geography team plugs in their own.
+checks it, and the API removes invalid or one-way candidates before offering
+them, even when caching is disabled. If none remain, the API returns an
+actionable 503 response. This also covers routing-service failures.
 
 ORS satisfies this through its `round_trip` option. The mock generates an
 out-and-back plus two loops, each centred one radius off the start so the start
@@ -162,8 +185,12 @@ limited walking         withheld: small_loop, large_loop
 in a neutral placeholder and declares the attribute in `unknown_attributes`.
 The gate skips those, because excluding routes on the strength of an invented
 number would quietly hide most of the map wherever the data is thin. ORS marks
-every one of its surface attributes this way today, and the UI says which
-details are estimated rather than surveyed.
+every one of its surface attributes this way today. Explanations do not claim
+unmeasured terrain is accessible, and the UI labels unknown steps as
+**Steps unverified**, rather than inventing a percentage of step-free distance.
+Neutral placeholders still contribute to the numeric score, so it is not an
+accessibility certification. A profile updated to report an activity as
+unavailable also blocks routes for older recommendations of that activity.
 
 ### Live tracking
 
@@ -173,6 +200,10 @@ as the user moves, draws a dashed red breadcrumb of where they have actually
 been, and shows elapsed time, distance moved, pace and progress against the
 recommended duration. Panning the map by hand releases follow mode until
 **Recentre on me** is pressed.
+
+Starting an activity opens the map automatically. The mobile journey view keeps
+tracking and completion controls directly below the map. Live map following is
+GPS tracking; turn-by-turn instructions and automatic rerouting are not yet implemented.
 
 Two details worth knowing:
 
@@ -206,9 +237,15 @@ A selected session can leave the app two ways:
 
 ### Mobile layout
 
-Below 720px the map moves to the top of the screen and the steps stack beneath
-it, controls grow to a 44px touch target, and inputs use 16px type so iOS Safari
-does not zoom the page when a field is focused.
+The app always uses a single-column mobile flow, capped at 430px on larger
+screens and filling smaller handsets. Map and route options are separate views.
+Controls have generous touch targets, inputs
+use 16px type to avoid iOS focus zoom, and keyboard focus is visible. Motion
+respects the system's reduced-motion preference.
+
+Changing the location, profile, or recommendation clears old route offers;
+late responses for previous inputs cannot bring them back. While an activity
+is selected, finish or abandon it before changing the start or selecting another.
 
 **Geolocation needs a secure context.** Browsers allow it on HTTPS and on
 `localhost` only. Opening the demo over a LAN address (`http://192.168.x.x`) on
@@ -247,6 +284,72 @@ FITWAZE/
 
 ## Quick start
 
-Detailed setup instructions (environment variables, running migrations, running the API,
-running tests, Docker) are documented at the end of this README once the corresponding
-build steps are complete.
+Requires Python 3.12 and Docker Desktop (or Docker Compose) for PostgreSQL/PostGIS.
+Run these commands from the repository root in PowerShell:
+
+```powershell
+py -3.12 -m venv backend/.venv
+backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
+# First setup only: preserve backend/.env if you already have one.
+if (!(Test-Path backend/.env)) { Copy-Item .env.example backend/.env }
+backend/.venv/Scripts/python.exe -c "import secrets; print(secrets.token_urlsafe(64))"
+backend/.venv/Scripts/python.exe -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
+```
+
+Put the first generated value in `JWT_SECRET` and the second in
+`FIELD_ENCRYPTION_KEY` in `backend/.env`. Keep that encryption key stable:
+existing encrypted health profiles require the same key to be read.
+Leave `ROUTE_PROVIDER=mock` for synthetic routes without an external API key.
+
+To run the whole stack in Docker:
+
+```powershell
+docker compose up --build
+```
+
+Compose waits for the database, applies migrations, and starts the API.
+Open [the demo](http://localhost:8000/demo),
+[API documentation](http://localhost:8000/docs), or
+[the health endpoint](http://localhost:8000/health).
+
+Alternatively, run only the database in Docker and the API locally:
+
+```powershell
+docker compose up -d db
+cd backend
+.venv/Scripts/python.exe -m alembic upgrade head
+.venv/Scripts/python.exe -m uvicorn app.main:app --reload
+```
+
+On macOS/Linux, use `python3.12` instead of `py -3.12` and `.venv/bin/python`
+instead of `.venv/Scripts/python.exe`; copy the example with `cp` on first setup.
+
+### Tests
+
+From `backend`, run:
+
+```powershell
+.venv/Scripts/python.exe -m pytest -q
+```
+
+The suite uses a disposable SQLite database and mocked routing, so it needs
+neither Docker nor an ORS key. It does not exercise PostgreSQL/PostGIS or the
+live routing service. `TEST_DATABASE_URL` currently does not switch the test
+database; the fixture explicitly creates SQLite.
+
+Client state and request-handling regression checks use Node's built-in test runner:
+
+```powershell
+# From the repository root, with Node installed:
+node --test backend/tests/demo_client.test.cjs
+```
+
+These checks use a small DOM stub; they do not verify rendered layout,
+Leaflet interactions, or real-device geolocation.
+
+### Authentication behavior
+
+Logout revokes the refresh token and removes its browser cookie. Invalid or
+replayed refresh tokens also clear that cookie; reuse revokes the token family.
+Already-issued access tokens remain valid until their expiry (15 minutes by
+default). Clients should discard their in-memory access token on logout.

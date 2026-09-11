@@ -129,3 +129,22 @@ def test_profile_requires_authentication(client):
     assert resp3.status_code == 401
     resp4 = client.delete("/profile/delete")
     assert resp4.status_code == 401
+
+
+def test_delete_account_after_activity_removes_its_history_only(client):
+    owner = register_and_login(client)
+    other = register_and_login(client)
+    headers = auth_headers(owner["access_token"])
+    client.put("/profile", json=valid_profile_payload(), headers=headers)
+    rec = client.post("/activity/recommendation", headers=headers).json()
+    request = {"activity_recommendation_id": rec["id"], "latitude": 40.7128, "longitude": -74.006}
+    option = client.post("/route/options", json=request, headers=headers).json()["options"][0]
+    selected = client.post("/route/select", json={**request, "candidate_label": option["label"]}, headers=headers)
+    assert selected.status_code == 201
+    deleted = client.delete("/profile/delete", headers=headers)
+    assert deleted.status_code == 204
+    assert client.get("/auth/me", headers=headers).status_code == 401
+    assert client.get("/auth/me", headers=auth_headers(other["access_token"])).status_code == 200
+    with TestingSessionLocal() as db:
+        for table in ("activity_sessions", "activity_recommendations", "refresh_tokens", "health_profiles"):
+            assert db.execute(text(f"SELECT count(*) FROM {table} WHERE user_id = :uid"), {"uid": owner["user_id"]}).scalar_one() == 0

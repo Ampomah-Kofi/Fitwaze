@@ -41,6 +41,10 @@ _MOBILITY_DURATION_FACTOR = 0.8
 _MIN_DURATION_MINUTES = 10
 
 
+class ActivityUnavailableError(ValueError):
+    """No requested walking/cycling activity is supported by this profile."""
+
+
 @dataclass
 class ActivityRecommendationResult:
     activity_type: ActivityTypeEnum
@@ -55,6 +59,11 @@ def _pick_activity_type(profile: HealthProfileData) -> tuple[ActivityTypeEnum, s
     "unable"; else if mobility_limitations impede walking but cycling_ability
     is fine, pick cycle; else default to walk."""
     preferred = profile.preferred_activity
+
+    if profile.walking_ability == AbilityEnum.unable:
+        if profile.cycling_ability == AbilityEnum.unable:
+            raise ActivityUnavailableError("Your current profile does not support a walking or cycling recommendation. Review your abilities before continuing.")
+        return ActivityTypeEnum.cycle, "Based on the abilities you shared, we're recommending cycling rather than walking."
 
     if preferred == PreferredActivityEnum.walk and profile.walking_ability != AbilityEnum.unable:
         return ActivityTypeEnum.walk, (
@@ -153,8 +162,14 @@ def _apply_mobility_reduction(
     return reduced, note
 
 
-def recommend_activity(profile: HealthProfileData) -> ActivityRecommendationResult:
-    activity_type, activity_reason = _pick_activity_type(profile)
+def recommend_activity(profile: HealthProfileData, activity_type: ActivityTypeEnum | None = None) -> ActivityRecommendationResult:
+    if activity_type is None:
+        activity_type, activity_reason = _pick_activity_type(profile)
+    else:
+        ability = profile.walking_ability if activity_type == ActivityTypeEnum.walk else profile.cycling_ability
+        if ability == AbilityEnum.unable:
+            raise ActivityUnavailableError("The activity you chose is unavailable based on your saved abilities. Choose another activity or review your profile.")
+        activity_reason = "You chose " + ("walking" if activity_type == ActivityTypeEnum.walk else "cycling") + " for this session. The duration is based on your saved profile."
 
     band_low, band_high, band_reason = _baseline_band(profile.current_weekly_minutes)
     duration, goal_note = _apply_goal_adjustment(band_low, band_high, profile.goal)

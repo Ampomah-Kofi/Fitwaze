@@ -6,6 +6,10 @@ from pydantic import BaseModel, ConfigDict
 from app.models.enums import ActivityTypeEnum
 
 
+class ActivityRecommendationRequest(BaseModel):
+    activity_type: ActivityTypeEnum | None = None
+
+
 class ActivityRecommendationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

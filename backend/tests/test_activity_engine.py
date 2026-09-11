@@ -9,7 +9,10 @@ Each test targets one rule branch from the approved spec:
 """
 from __future__ import annotations
 
+import pytest
+
 from app.engines.activity_engine import DISCLAIMER, recommend_activity
+from app.engines.activity_engine import ActivityUnavailableError
 from app.models.enums import (
     AbilityEnum,
     ActivityTypeEnum,
@@ -71,6 +74,29 @@ def test_defaults_to_walk_when_no_preference_and_no_mobility_issue():
     profile = make_profile(preferred_activity=PreferredActivityEnum.no_preference)
     result = recommend_activity(profile)
     assert result.activity_type == ActivityTypeEnum.walk
+
+
+def test_unable_walking_never_defaults_to_walk_even_without_mobility_limitation():
+    result = recommend_activity(make_profile(walking_ability=AbilityEnum.unable))
+    assert result.activity_type == ActivityTypeEnum.cycle
+
+
+def test_both_activities_unavailable_returns_no_plan():
+    with pytest.raises(ActivityUnavailableError):
+        recommend_activity(make_profile(walking_ability=AbilityEnum.unable, cycling_ability=AbilityEnum.unable))
+
+
+def test_session_choice_is_personalised_without_changing_profile_preference():
+    profile = make_profile(preferred_activity=PreferredActivityEnum.walk)
+    result = recommend_activity(profile, ActivityTypeEnum.cycle)
+    assert result.activity_type == ActivityTypeEnum.cycle
+    assert result.duration_minutes == 25
+    assert profile.preferred_activity == PreferredActivityEnum.walk
+
+
+def test_session_choice_cannot_override_inability():
+    with pytest.raises(ActivityUnavailableError):
+        recommend_activity(make_profile(cycling_ability=AbilityEnum.unable), ActivityTypeEnum.cycle)
 
 
 def test_defaults_to_walk_when_preferred_unable_and_cycling_also_unable():

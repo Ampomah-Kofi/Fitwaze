@@ -12,11 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.engines.activity_engine import DISCLAIMER, recommend_activity
+from app.engines.activity_engine import DISCLAIMER, ActivityUnavailableError, recommend_activity
 from app.models.activity import ActivityRecommendation
 from app.models.profile import HealthProfile, profile_to_data
 from app.models.user import User
-from app.schemas.activity import ActivityRecommendationResponse
+from app.schemas.activity import ActivityRecommendationRequest, ActivityRecommendationResponse
 from app.security.deps import get_current_user
 
 router = APIRouter(prefix="/activity", tags=["activity"])
@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 @router.post("/recommendation", response_model=ActivityRecommendationResponse)
 def create_activity_recommendation(
+    payload: ActivityRecommendationRequest | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ActivityRecommendationResponse:
@@ -36,7 +37,10 @@ def create_activity_recommendation(
         )
 
     profile_data = profile_to_data(profile)
-    result = recommend_activity(profile_data)
+    try:
+        result = recommend_activity(profile_data, payload.activity_type if payload else None)
+    except ActivityUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     record = ActivityRecommendation(
         user_id=current_user.id,

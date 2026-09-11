@@ -24,11 +24,12 @@ to plug in — either by extending this provider or by adding a new
 from __future__ import annotations
 
 import logging
+import math
 
 import httpx
 
 from app.config import get_settings
-from app.engines.route_engine.base import RawRoute, RouteProvider
+from app.engines.route_engine.base import RawRoute, RouteProvider, RouteProviderError, returns_to_start
 from app.models.enums import ActivityTypeEnum
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ _UNMEASURED = frozenset({
 })
 
 
-class ORSProviderError(RuntimeError):
+class ORSProviderError(RouteProviderError):
     """Raised when the ORS API call fails or returns an unexpected shape."""
 
 
@@ -109,14 +110,20 @@ class ORSRouteProvider(RouteProvider):
                     feature = self._request_round_trip(
                         client, profile, start_lat, start_lon, length_m, seed
                     )
-                except (httpx.HTTPError, ORSProviderError) as exc:
+                    if feature["geometry"]["type"] != "LineString":
+                        raise ORSProviderError("Expected a LineString")
+                    geometry = [(float(point[1]), float(point[0])) for point in feature["geometry"]["coordinates"]]
+                    segment = feature["properties"]["segments"][0]
+                    distance_m = float(segment["distance"])
+                    estimated_minutes = float(segment["duration"]) / 60.0
+                    candidate = RawRoute(geometry, distance_m, estimated_minutes)
+                    if not (math.isfinite(distance_m) and distance_m > 0 and
+                            math.isfinite(estimated_minutes) and estimated_minutes > 0 and
+                            returns_to_start(candidate, start_lat, start_lon)):
+                        raise ORSProviderError("Invalid round-trip geometry or metrics")
+                except (httpx.HTTPError, ORSProviderError, KeyError, IndexError, TypeError, ValueError) as exc:
                     logger.warning("ors_request_failed label=%s error=%s", label, type(exc).__name__)
                     continue
-
-                geometry = [(lat, lon) for lon, lat in feature["geometry"]["coordinates"]]
-                segment = feature["properties"]["segments"][0]
-                distance_m = float(segment["distance"])
-                estimated_minutes = float(segment["duration"]) / 60.0
 
                 routes.append(
                     RawRoute(
@@ -177,4 +184,4 @@ class ORSRouteProvider(RouteProvider):
         try:
             return data["features"][0]
         except (KeyError, IndexError) as exc:
-            raise ORSProviderError(f"unexpected ORS response shape: {data!r}") from exc
+            raise ORSProviderError("Unexpected ORS response shape") from exc

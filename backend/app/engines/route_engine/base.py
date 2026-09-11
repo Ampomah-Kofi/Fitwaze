@@ -21,6 +21,10 @@ from app.models.enums import ActivityTypeEnum
 ROUND_TRIP_TOLERANCE_M = 60.0
 
 
+class RouteProviderError(RuntimeError):
+    """The configured provider could not produce usable round trips."""
+
+
 @dataclass
 class RawRoute:
     """A single candidate route with geometry + normalized (0-1) scoring
@@ -79,7 +83,7 @@ class RouteProvider(ABC):
         activity from wherever the user happens to be — they need to get home
         again, and a one-way route would leave them stranded at the far end with
         a journey nobody has accounted for. `returns_to_start()` below checks
-        this, and the API logs a warning for any provider that violates it.
+        this, and the API rejects candidates that violate it.
         """
         raise NotImplementedError
 
@@ -92,7 +96,7 @@ def _metres_between(a: tuple[float, float], b: tuple[float, float]) -> float:
         math.sin(d_lat / 2) ** 2
         + math.cos(math.radians(a[0])) * math.cos(math.radians(b[0])) * math.sin(d_lon / 2) ** 2
     )
-    return 2 * radius_m * math.asin(math.sqrt(h))
+    return 2 * radius_m * math.asin(math.sqrt(min(1.0, max(0.0, h))))
 
 
 def returns_to_start(
@@ -102,7 +106,12 @@ def returns_to_start(
     tolerance_m: float = ROUND_TRIP_TOLERANCE_M,
 ) -> bool:
     """Whether a route both begins and ends at the requested start point."""
-    if not route.geometry:
+    if len(route.geometry) < 3:
+        return False
+    if any(not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180)
+           for lat, lon in route.geometry):
+        return False
+    if len(set(route.geometry)) < 2:
         return False
     start = (start_lat, start_lon)
     return (

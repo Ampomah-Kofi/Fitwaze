@@ -13,6 +13,7 @@ Security behaviors implemented here:
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -64,6 +65,13 @@ def _set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
 
 def _clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/")
+
+
+def _refresh_error(detail: str) -> JSONResponse:
+    # Raising HTTPException discards headers on the injected response.
+    response = JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": detail})
+    _clear_refresh_cookie(response)
+    return response
 
 
 def _issue_tokens(db: Session, user: User, response: Response) -> AccessTokenResponse:
@@ -143,7 +151,7 @@ def login(
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)
-def refresh(request: Request, response: Response, db: Session = Depends(get_db)) -> AccessTokenResponse:
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)) -> AccessTokenResponse | Response:
     raw_refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
     if not raw_refresh_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token")
@@ -152,18 +160,13 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
         issued = rotate_refresh_token(db, raw_refresh_token)
     except RefreshTokenReuseError:
         db.commit()  # persist the family-wide revocation
-        _clear_refresh_cookie(response)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token reuse detected; all sessions revoked",
-        )
+        return _refresh_error("Refresh token reuse detected; all sessions revoked")
     except InvalidTokenError:
-        _clear_refresh_cookie(response)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        return _refresh_error("Invalid refresh token")
 
     user = db.get(User, issued.record.user_id)
     if user is None:  # pragma: no cover - defensive, FK guarantees existence
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        return _refresh_error("Invalid refresh token")
 
     access_token = create_access_token(user.id)
     _set_refresh_cookie(response, issued.raw_token)
@@ -183,7 +186,8 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
         revoke_refresh_token(db, raw_refresh_token)
         db.commit()
     _clear_refresh_cookie(response)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 @router.get("/me", response_model=UserPublic)

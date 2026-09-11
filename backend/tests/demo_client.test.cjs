@@ -1,0 +1,167 @@
+// Interaction regressions for the inline client, using a small DOM stub.
+// These exercise state and request handling, not browser layout or Leaflet.
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const html = fs.readFileSync(path.join(__dirname, '../app/static/demo.html'), 'utf8');
+const script = html.match(/<script>\s*([\s\S]*?)<\/script>/)[1];
+
+function setup(fetch = async () => { throw Error('Unexpected network request'); }) {
+  const timers = new Map();
+  let timerId = 0;
+  function node() {
+    const attrs = {}, classes = new Set();
+    return {dataset: {}, style: {}, hidden: false, value: '', innerHTML: '', textContent: '',
+      classList: {add: value => classes.add(value), remove: value => classes.delete(value), contains: value => classes.has(value)},
+      setAttribute: (key, value) => attrs[key] = value, removeAttribute: key => delete attrs[key],
+      getAttribute: key => attrs[key], querySelectorAll: () => []};
+  }
+  const nodes = new Map([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => [id, node()]));
+  const root = node();
+  const tabs = ['today', 'route', 'progress'].map(screen => ({...node(), dataset: {screen}}));
+  const context = vm.createContext({
+    document: {documentElement: root, getElementById: id => {
+      assert(nodes.has(id), `Missing element: ${id}`); return nodes.get(id);
+    }, querySelectorAll: selector => selector === '#tabs button' ? tabs : [], addEventListener() {}},
+    window: {location: {pathname: '/mobile'}, addEventListener() {}}, navigator: {},
+    setTimeout: () => 1, clearTimeout() {},
+    setInterval: callback => {timers.set(++timerId, callback); return timerId;},
+    clearInterval: id => timers.delete(id), fetch, console,
+  });
+  vm.runInContext(script, context);
+  return {nodes, root, timers, run: code => vm.runInContext(code, context)};
+}
+const response = body => ({ok: true, text: async () => JSON.stringify(body)});
+const seed = `recommendation = {id: 'recommendation-1', activity_type: 'walk', duration_minutes: 30};
+              startPoint = {latitude: 40.7128, longitude: -74.006};`;
+
+test('main interface has accessible mobile map/list controls', () => {
+  const app = setup();
+  app.nodes.get('btn-route-list').onclick();
+  assert.equal(app.nodes.get('screen-route').dataset.panel, 'routes');
+  assert.equal(app.nodes.get('btn-route-list').getAttribute('aria-pressed'), 'true');
+  app.nodes.get('btn-route-map').onclick();
+  assert.equal(app.nodes.get('screen-route').dataset.panel, 'map');
+});
+
+test('changing location clears previously offered candidates', () => {
+  const app = setup();
+  app.run(seed + `offeredContext = {options: [{label: 'small_loop'}]}; setStartPoint(41, -73, null, 'Start');`);
+  assert.equal(app.run('offeredContext'), null);
+  assert.match(app.nodes.get('options-out').innerHTML, /fresh route/);
+});
+
+test('a late options response cannot restore routes for an old location', async () => {
+  let resolve;
+  const pending = new Promise(r => resolve = r);
+  const app = setup(() => pending);
+  app.run(seed);
+  const request = app.nodes.get('btn-options').onclick();
+  app.run(`setStartPoint(41, -73, null, 'New start');`);
+  resolve(response({options: [], provider: 'mock'}));
+  await request;
+  assert.equal(app.run('offeredContext'), null);
+  assert.equal(app.nodes.get('screen-route').dataset.panel, undefined);
+});
+
+test('selection uses the displayed revision and prevents duplicate selection', async () => {
+  let resolve;
+  const pending = new Promise(r => resolve = r);
+  const calls = [];
+  const app = setup((url, options) => {calls.push({url, body: JSON.parse(options.body)}); return pending;});
+  app.run(seed + `offeredContext = {activity_recommendation_id: 'recommendation-1', latitude: 40.7128,
+     longitude: -74.006, options: [{label: 'small_loop', candidate_revision: 'revision-1'}]};`);
+  const selection = app.run(`selectRoute('small_loop')`);
+  await app.run(`selectRoute('small_loop')`);
+  app.run(`setStartPoint(42, -72, null, 'Changed start');`);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.candidate_revision, 'revision-1');
+  assert.equal(app.run('startPoint.latitude'), 40.7128);
+  resolve(response({id: 'session-1', status: 'selected', distance_m: 1000, estimated_minutes: 30}));
+  await selection;
+  assert.equal(app.run('offeredContext'), null);
+  assert.equal(app.nodes.get('session-card').hidden, false);
+});
+
+test('unknown steps are displayed as unverified, never as a percentage', async () => {
+  const app = setup(async () => response({provider: 'ors', options: [{
+    label: 'small_loop', candidate_revision: 'revision-1', distance_m: 1000, estimated_minutes: 15,
+    score: 50, explanation: 'Unverified', score_breakdown: {step_free: 0.5}, unverified: ['stairs'],
+  }]}));
+  app.run(seed);
+  await app.nodes.get('btn-options').onclick();
+  assert.match(app.nodes.get('options-out').innerHTML, /Steps unverified/);
+  assert.doesNotMatch(app.nodes.get('options-out').innerHTML, /% step-free/);
+});
+
+test('simulation follows the route and completes without writing real activity', async () => {
+  const requests = [];
+  const app = setup(async url => {requests.push(url); throw Error('Simulation must stay local');});
+  app.run(seed + `offeredContext = {activity_recommendation_id: 'recommendation-1', latitude: 40.7128,
+    longitude: -74.006, options: [{label: 'small_loop', distance_m: 1000, estimated_minutes: 12,
+    geometry: [[40.7128, -74.006], [40.714, -74.005], [40.7128, -74.006]]}]};`);
+  await app.run(`selectRoute('small_loop', true)`);
+  assert.equal(app.run('session.simulated'), true);
+  app.run(`map = {panTo(point) {globalThis.lastPan = point;}};
+    L = {polyline() {return {addTo() {return this;}, addLatLng() {}, remove() {}};},
+         circleMarker() {return {addTo() {return this;}, setLatLng() {}, remove() {}};}};`);
+  app.nodes.get('btn-track').onclick();
+  assert(app.nodes.get('screen-route').classList.contains('is-journey'));
+  assert.equal(app.nodes.get('screen-route').dataset.panel, 'map');
+  for (let tick = 0; tick < 81; tick++) {
+    for (const callback of [...app.timers.values()]) callback();
+  }
+  assert.equal(app.timers.size, 0);
+  assert(Math.abs(app.run('lastFix[0]') - 40.7128) < 0.000001);
+  assert(Math.abs(app.run('lastFix[1]') + 74.006) < 0.000001);
+  assert(Math.abs(app.run('lastPan[0]') - 40.7128) < 0.000001);
+  assert(Math.abs(app.run('travelledMetres') - 1000) < 0.001);
+  await app.run(`updateSession('completed')`);
+  assert.equal(app.run('simulatedSessions.length'), 1);
+  assert.match(app.nodes.get('simulation-progress').innerHTML, /separate from your real/);
+  assert.equal(requests.length, 0);
+});
+
+test('starting GPS tracking opens the map and keeps session controls in journey view', () => {
+  const app = setup();
+  app.run(seed + `session = {status: 'selected'};
+    window.isSecureContext = true;
+    navigator.geolocation = {watchPosition() {return 17;}, clearWatch() {}};
+    startTracking();`);
+  assert.equal(app.nodes.get('screen-route').dataset.panel, 'map');
+  assert(app.nodes.get('screen-route').classList.contains('is-journey'));
+  assert.equal(app.nodes.get('track-out').hidden, false);
+  assert.equal(app.nodes.get('btn-track').textContent, 'Stop tracking');
+});
+
+test('recommendation route button opens the start-point panel at the top', async () => {
+  const app = setup(async () => response({id: 'rec-1', activity_type: 'walk', duration_minutes: 12,
+    rationale: 'Short session', disclaimer: 'Wellness guidance'}));
+  await app.nodes.get('btn-recommend').onclick();
+  app.run(`showRoutePanel('routes')`);
+  app.nodes.get('app-main').scrollTop = 600;
+  app.nodes.get('btn-goroute').onclick();
+  assert.equal(app.nodes.get('screen-route').dataset.panel, 'map');
+  assert(app.nodes.get('screen-route').classList.contains('active'));
+  assert.equal(app.nodes.get('app-main').scrollTop, 0);
+  assert.match(app.nodes.get('start-state').textContent, /Choose a starting point/);
+});
+
+test('route failures remain visible and the Find button can be retried', async () => {
+  const app = setup(async () => ({ok: false, status: 503, text: async () => JSON.stringify({detail: 'Routing unavailable'})}));
+  app.run(seed);
+  await app.nodes.get('btn-options').onclick();
+  assert.equal(app.nodes.get('route-error').hidden, false);
+  assert.match(app.nodes.get('route-error').textContent, /Routing unavailable/);
+  assert.equal(app.nodes.get('btn-options').disabled, false);
+});
+
+test('route cards do not try to animate a hidden map', () => {
+  const app = setup();
+  app.run(`map = {flyToBounds() {throw Error('Hidden map animation');}};
+    optionLines = [{setStyle() {}, getBounds() {return {pad() {return {};}};}}];
+    showScreen('route'); showRoutePanel('routes'); focusOption(0);`);
+  assert.equal(app.run('focusedOptionIndex'), 0);
+});

@@ -2,18 +2,21 @@
 from __future__ import annotations
 
 import app.main as main
+import pytest
 
 
-def test_demo_page_is_served_outside_production(client):
-    resp = client.get("/demo")
+@pytest.mark.parametrize("path", ["/", "/demo", "/mobile"])
+def test_demo_page_is_served_outside_production(client, path):
+    resp = client.get(path)
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert "FitWaze" in resp.text
 
 
-def test_demo_page_is_not_exposed_in_production(client, monkeypatch):
+@pytest.mark.parametrize("path", ["/", "/demo", "/mobile"])
+def test_demo_page_is_not_exposed_in_production(client, monkeypatch, path):
     monkeypatch.setattr(main.settings, "environment", "production")
-    assert client.get("/demo").status_code == 404
+    assert client.get(path).status_code == 404
 
 
 def test_demo_page_does_not_persist_credentials_in_the_browser(client):

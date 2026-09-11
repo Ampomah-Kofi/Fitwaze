@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import logging
 import time
+import math
+from threading import RLock
 
 from app.config import get_settings
-from app.engines.route_engine.base import RawRoute, RouteProvider, returns_to_start
+from app.engines.route_engine.base import RawRoute, RouteProvider, RouteProviderError, returns_to_start
 from app.models.enums import ActivityTypeEnum
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,7 @@ _MAX_ENTRIES = 512
 
 _CacheKey = tuple[str, float, float, str, int]
 _cache: dict[_CacheKey, tuple[float, list[RawRoute]]] = {}
+_cache_lock = RLock()
 
 
 def _make_key(
@@ -66,7 +69,8 @@ def _evict_expired_and_overflow(now: float) -> None:
 
 def clear_route_cache() -> None:
     """Drop every cached entry (used by the test suite)."""
-    _cache.clear()
+    with _cache_lock:
+        _cache.clear()
 
 
 def get_candidate_routes_cached(
@@ -77,18 +81,11 @@ def get_candidate_routes_cached(
     target_duration_min: int,
 ) -> list[RawRoute]:
     ttl_seconds = get_settings().route_cache_ttl_seconds
-    if ttl_seconds <= 0:
-        return provider.get_candidate_routes(
-            start_lat=start_lat,
-            start_lon=start_lon,
-            activity_type=activity_type,
-            target_duration_min=target_duration_min,
-        )
-
     key = _make_key(provider, start_lat, start_lon, activity_type, target_duration_min)
     now = time.monotonic()
 
-    cached = _cache.get(key)
+    with _cache_lock:
+        cached = _cache.get(key) if ttl_seconds > 0 else None
     if cached is not None and cached[0] > now:
         return cached[1]
 
@@ -98,29 +95,29 @@ def get_candidate_routes_cached(
         activity_type=activity_type,
         target_duration_min=target_duration_min,
     )
-    _warn_on_one_way_routes(provider, routes, start_lat, start_lon)
+    routes = _usable_routes(provider, routes, start_lat, start_lon)
 
-    _evict_expired_and_overflow(now)
-    _cache[key] = (now + ttl_seconds, routes)
-    logger.debug("route_cache_store provider=%s entries=%d", key[0], len(_cache))
+    if ttl_seconds > 0:
+        with _cache_lock:
+            now = time.monotonic()
+            _evict_expired_and_overflow(now)
+            _cache[key] = (now + ttl_seconds, routes)
+            logger.debug("route_cache_store provider=%s entries=%d", key[0], len(_cache))
     return routes
 
 
-def _warn_on_one_way_routes(
+def _usable_routes(
     provider: RouteProvider, routes: list[RawRoute], start_lat: float, start_lon: float
-) -> None:
-    """Flag any provider that returns a route which does not come back.
-
-    Round trips are part of the RouteProvider contract (see `base.py`): the user
-    is somewhere, and needs to end up there again. A third-party provider that
-    breaks this would otherwise fail silently and strand people, so it is
-    logged loudly rather than quietly accepted. Nothing is dropped — a one-way
-    route is still better than no route while the provider is being fixed.
-    """
+) -> list[RawRoute]:
+    """Reject invalid geometry and one-way routes before they can be offered."""
+    usable = [route for route in routes
+              if returns_to_start(route, start_lat, start_lon)
+              and math.isfinite(route.distance_m) and route.distance_m > 0
+              and math.isfinite(route.estimated_minutes) and route.estimated_minutes > 0]
     offenders = [
         route.label or "unlabelled"
         for route in routes
-        if not returns_to_start(route, start_lat, start_lon)
+        if route not in usable
     ]
     if offenders:
         logger.warning(
@@ -128,3 +125,6 @@ def _warn_on_one_way_routes(
             type(provider).__name__,
             ",".join(offenders),
         )
+    if not usable:
+        raise RouteProviderError("No usable round-trip routes")
+    return usable

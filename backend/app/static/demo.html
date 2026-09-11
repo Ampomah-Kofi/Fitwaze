@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#0f1720" />
-<title>FitWaze demo</title>
+<meta name="theme-color" content="#193e32" />
+<title>FitWaze — Move your way</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root {
-    --ink: #0f1720;
-    --muted: #64717f;
-    --line: #e4e8ed;
-    --bg: #f5f7f9;
+    --ink: #203a30;
+    --muted: #617268;
+    --line: #dce4dc;
+    --bg: #f6f7f2;
     --card: #ffffff;
-    --accent: #1f6feb;
+    --accent: #246347;
     --good: #1a7f4b;
     --warn: #a8620a;
     --bad: #b4232c;
-    --radius: 14px;
+    --radius: 18px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
@@ -28,10 +28,7 @@
     background: var(--bg);
   }
 
-  /* --- Device shell ------------------------------------------------------
-     On a desktop this is a phone sitting on a desk, so the demo reads as an
-     app rather than a web page. On a real handset the frame disappears and the
-     app simply fills the screen. */
+  /* One mobile interface: full-screen on phones, phone-width on larger screens. */
   #device {
     position: relative;
     display: flex;
@@ -41,30 +38,8 @@
     height: 100dvh;
     width: 100%;
   }
-  @media (min-width: 721px) {
-    body { display: grid; place-items: center; background: #dfe4ea; }
-    #device {
-      width: 393px;
-      height: 852px;
-      max-height: 96vh;
-      border: 12px solid #0f1720;
-      border-radius: 46px;
-      box-shadow: 0 30px 60px rgba(15, 23, 32, .35);
-    }
-  }
 
-  /* Fake status bar, purely to sell the simulation. */
-  #statusbar {
-    flex: none;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 22px 4px;
-    font-size: 13px;
-    font-weight: 600;
-    background: var(--card);
-  }
-  #statusbar .icons { letter-spacing: 2px; font-size: 11px; color: var(--muted); }
+
 
   #appbar {
     flex: none;
@@ -138,7 +113,7 @@
     padding: 10px 4px 12px; font-size: 11px; font-weight: 600; border-radius: 0;
   }
   #tabs button .glyph { display: block; font-size: 19px; margin-bottom: 2px; }
-  #tabs button[aria-selected="true"] { color: var(--accent); }
+  #tabs button[aria-current="page"] { color: var(--accent); }
   #tabs[hidden] { display: none; }
 
   #status {
@@ -203,6 +178,145 @@
 
   #track-out .stat b { transition: color .2s ease; }
 
+  /* Mobile application shell and shared visual language. */
+  body { background: #eef1e9; }
+  #device { height: 100dvh; max-width: 430px; margin: auto; container: fitwaze / inline-size; }
+  .mobile-route-switch { display: none; }
+  .profile-editor { min-width: 0; }
+  .profile-editor > summary { cursor: pointer; padding: 14px 0; font-weight: 700; }
+  .journey-mode { margin-left: auto; font-size: 11px; color: var(--accent); }
+  #screen-route.is-journey .route-sidebar,
+  #screen-route.is-journey .mobile-route-switch,
+  #screen-route.is-journey .location-controls,
+  #screen-route.is-journey .screen-heading,
+  #screen-route.is-journey .route-context { display: none; }
+  #screen-route.is-journey .map-panel { display: block; }
+  #screen-route.is-journey #map { height: clamp(210px, 32dvh, 300px); margin-bottom: 0; }
+  #screen-route.is-journey #session-card { margin-top: 12px; }
+  #screen-route.is-journey #session-card h3 { font-size: 17px; }
+  #track-out .stat { padding: 10px; }
+  #track-out .stat b { font-size: 20px; }
+  .session-tools { margin-top: 12px; }
+  .session-tools summary { padding: 10px 0; cursor: pointer; font-size: 13px; }
+  #simulation-progress { margin-top: 16px; }
+  #simulation-progress[hidden] { display: none; }
+  .route-context { background: #eaf0e3; border-radius: 12px; padding: 12px 16px; font-size: 14px; margin-bottom: 16px; }
+  #appbar { align-items: center; padding: 20px 24px; gap: 12px; }
+  #appbar h1 { font-size: 25px; letter-spacing: -.055em; }
+  #appbar .brand-caption { font-size: 12px; border-left: 1px solid var(--line); padding-left: 12px; }
+  #appbar .demo-badge { margin-left: auto; font-size: 11px; background: #eef3e8; padding: 5px 10px; border-radius: 20px; color: #425b42; }
+  .brand-mark { width: 34px; height: 34px; flex: none; }
+  main { min-height: 0; scroll-behavior: smooth; }
+  .screen { padding: 28px; max-width: 430px; margin: auto; }
+  .screen-heading { margin-bottom: 24px; }
+  .eyebrow { display: block; font-size: 11px; letter-spacing: .13em; font-weight: 700; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .screen .screen-heading h2 { text-transform: none; letter-spacing: -.04em; color: var(--ink); font-size: clamp(28px, 4vw, 38px); margin-bottom: 8px; line-height: 1.15; }
+  .screen-heading p { margin: 0; color: var(--muted); max-width: 560px; }
+  .card { padding: 24px; box-shadow: 0 3px 12px #203a3004; }
+  .card h3 { font-size: 20px; letter-spacing: -.025em; margin-bottom: 10px; }
+  .card p { font-size: 14px; line-height: 1.6; }
+  label { font-size: 13px; color: #435a4e; font-weight: 600; margin-bottom: 7px; }
+  input, select { min-width: 0; min-height: 48px; background: #fcfdfb; margin-bottom: 18px; border-radius: 10px; }
+  input:focus, select:focus { box-shadow: 0 0 0 3px #24634720; }
+  button:focus-visible, a:focus-visible { outline: 3px solid #b58d32; outline-offset: 3px; }
+  button { border-radius: 10px; }
+  button.ghost { border-color: var(--line); color: var(--ink); }
+  .pair { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+  .pair > div { min-width: 0; }
+  .welcome-art { position: relative; overflow: hidden; border-radius: 22px; padding: 36px; background: #193e32; color: #fff; }
+  .welcome-art .eyebrow { color: #bed6a2; }
+  .welcome-art h2 { color: #fff; font-size: clamp(36px, 4.5vw, 58px); line-height: 1.04; text-transform: none; letter-spacing: -.055em; margin: 18px 0; max-width: 390px; }
+  .welcome-art p { color: #d1dfd4; max-width: 340px; line-height: 1.7; }
+  .route-art { display: block; width: 100%; height: 220px; margin: 16px 0; }
+  .welcome-footer { font-size: 12px; color: #d1dfd4; display: flex; align-items: center; gap: 9px; }
+  .welcome-footer::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #c8df9d; }
+  .auth-card { align-self: center; margin: 0; padding: 32px; }
+  .auth-card h3 { font-size: 27px; }
+  .auth-card > p { margin-bottom: 26px; }
+  .auth-card .note { font-size: 12px; margin: 14px 0 0; text-align: center; }
+  .password-field { position: relative; }
+  .password-field input { padding-right: 72px; }
+  .password-field button { position: absolute; top: 2px; right: 3px; width: 64px; min-height: 44px; padding: 0; background: transparent; color: var(--accent); font-size: 12px; }
+  .profile-layout, .route-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+  .activity-panel { position: static; }
+  .activity-panel .card { background: #eaf0e3; border-color: #d8e1cd; }
+  .step-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 4px 0 14px; }
+  .section-divider { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 8px; }
+  #map { height: 440px; background: #e7eddf; border-radius: 18px; }
+  .map-panel { min-width: 0; }
+  .route-sidebar { min-width: 0; }
+  .empty-state { border: 1px dashed #b8c9b5; border-radius: 16px; padding: 25px; color: var(--muted); text-align: center; font-size: 14px; line-height: 1.65; }
+  .empty-state b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 7px; }
+  .option { padding: 20px; }
+  .option .score { color: var(--accent); }
+  .option.focused { border-color: var(--accent); box-shadow: 0 6px 18px #24634718; }
+  .stats { gap: 16px; }
+  .stats[hidden] { display: none; }
+  #progress-out { grid-template-columns: repeat(3, 1fr); }
+  .stat { padding: 24px; }
+  .stat b { font-size: 30px; color: var(--accent); }
+  .stat span { font-size: 13px; }
+  .note, .banner, .disclaimer { font-size: 13px; line-height: 1.6; }
+  #tabs { gap: 8px; padding: 10px 24px max(10px, env(safe-area-inset-bottom)); }
+  #tabs button { border-radius: 12px; font-size: 12px; padding: 10px; }
+  #tabs button[aria-current="page"] { background: #eaf0e3; color: #21563f; }
+  #tabs .glyph svg { display: block; width: 21px; height: 21px; margin: 0 auto 4px; }
+  #status { left: 50%; right: auto; width: calc(100% - 32px); max-width: 520px; transform: translate(-50%, 6px); }
+  #status.show { transform: translate(-50%, 0); }
+  @media (min-width: 481px) {
+    body { padding: 16px; }
+    #device { height: calc(100dvh - 32px); border: 1px solid #d5dfd2; border-radius: 28px; box-shadow: 0 18px 55px #203a3020; }
+  }
+
+    .profile-layout, .route-layout { grid-template-columns: 1fr; }
+    .activity-panel { position: static; }
+    .welcome-art { padding: 26px; }
+    .auth-card { padding: 24px; }
+    #screen-auth.active { gap: 20px; }
+
+
+    #screen-auth.active { display: block; padding-top: 20px; padding-bottom: 20px; }
+    #tabs { display: grid; }
+    #tabs button { width: auto; }
+    #appbar { padding: 16px 20px; }
+    #appbar .brand-caption { display: none; }
+    .screen { padding: 20px 18px; }
+    .welcome-art { padding: 24px; margin-bottom: 20px; }
+    .welcome-art h2 { font-size: 32px; margin: 10px 0; max-width: 270px; }
+    .welcome-art p { font-size: 14px; margin-bottom: 0; max-width: 280px; }
+    .route-art { display: none; }
+    .welcome-footer { display: none; }
+    .welcome-art { margin-bottom: 16px; }
+    .welcome-art .eyebrow { font-size: 10px; }
+    .welcome-footer { font-size: 11px; }
+    .card { padding: 20px; }
+    #map { height: 330px; }
+    #progress-out { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat { padding: 18px; }
+    .stat b { font-size: 25px; }
+    .pair { gap: 0 12px; }
+    #tabs { padding-left: 12px; padding-right: 12px; }
+    #appbar .demo-badge { display: none; }
+    .screen-heading { margin-bottom: 18px; }
+    .screen .screen-heading h2 { font-size: 27px; }
+    .screen-heading p { font-size: 14px; }
+    #screen-route .screen-heading h2 { font-size: 25px; }
+    #screen-route .screen-heading p { display: none; }
+    #map { height: clamp(230px, 40dvh, 390px); }
+    .mobile-route-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 4px; background: #e8eddf; border-radius: 12px; margin-bottom: 16px; }
+    .mobile-route-switch button { margin: 0; min-height: 44px; padding: 9px; background: transparent; color: var(--muted); }
+    .mobile-route-switch button[aria-pressed="true"] { background: #fff; color: var(--accent); box-shadow: 0 2px 5px #203a3010; }
+    #screen-route[data-panel="map"] .route-sidebar { display: none; }
+    #screen-route[data-panel="routes"] .map-panel { display: none; }
+    .profile-layout { gap: 16px; }
+    #appbar { padding-top: max(16px, env(safe-area-inset-top)); }
+    #status { bottom: calc(90px + env(safe-area-inset-bottom)); }
+
+  @container fitwaze (max-width: 360px) {
+    .pair { grid-template-columns: 1fr; }
+    .side-by-side { grid-template-columns: 1fr; }
+  }
+
   /* Someone who has asked their OS for less motion gets none of it. */
   @media (prefers-reduced-motion: reduce) {
     *, *::after { animation: none !important; transition: none !important; }
@@ -211,37 +325,62 @@
 </head>
 <body>
 <div id="device">
-  <div id="statusbar">
-    <span id="clock">9:41</span>
-    <span class="icons">▲▲▲ ▮▮▮</span>
-  </div>
-
-  <div id="appbar">
+<div id="appbar">
+    <svg class="brand-mark" viewBox="0 0 36 36" fill="none" aria-hidden="true"><rect width="36" height="36" rx="11" fill="#246347"/><path d="M11 25V12h14M11 18h10" stroke="#d6e8b6" stroke-width="3" stroke-linecap="round"/><circle cx="25" cy="25" r="3" fill="#d6e8b6"/></svg>
     <h1>FitWaze</h1>
-    <span>person + place</span>
+    <span class="brand-caption">person + place</span>
+    <span class="demo-badge">Demo experience</span>
   </div>
 
-  <main>
+  <main id="app-main">
     <!-- ---------- Sign in ---------- -->
     <section id="screen-auth" class="screen active">
-      <div class="card">
-        <h3>Welcome</h3>
-        <p>Personalised walking and cycling routes, matched to your health profile
-           and to what is actually around you.</p>
+      <div class="welcome-art">
+        <span class="eyebrow">A little movement. A new perspective.</span>
+        <h2>Find your path.<br />Move your way.</h2>
+        <p>Walking and cycling routes shaped around you, your pace, and the places nearby.</p>
+        <svg class="route-art" viewBox="0 0 440 230" fill="none" aria-hidden="true">
+          <path d="M-20 190C60 60 125 260 235 112S380 50 465 10" stroke="#2d5544" stroke-width="65"/>
+          <path d="M-20 90C110-35 150 180 265 175S380 140 465 215" stroke="#42634c" stroke-width="2"/>
+          <path d="M-20 65C110-60 150 155 265 150S380 115 465 190" stroke="#42634c" stroke-width="2"/>
+          <path d="M68 174C43 96 121 49 184 87S203 200 278 166 347 54 372 59" stroke="#d2e5a8" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 11"/>
+          <circle cx="68" cy="174" r="14" fill="#193e32" stroke="#d2e5a8" stroke-width="3"/><circle cx="68" cy="174" r="5" fill="#d2e5a8"/>
+          <path d="M372 80s-17-17-17-29a17 17 0 0 1 34 0c0 12-17 29-17 29Z" fill="#d2e5a8"/><circle cx="372" cy="51" r="5" fill="#193e32"/>
+          <circle cx="290" cy="48" r="18" fill="#42634c"/><path d="M290 36v25m-7-17 7 7 7-7" stroke="#8fa783" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="126" cy="190" r="12" fill="#42634c"/>
+        </svg>
+        <div class="welcome-footer">Your pace. Your starting point. Your next step.</div>
+      </div>
+      <div class="card auth-card">
+        <span class="eyebrow">Let's get moving</span>
+        <h3>Let's get started</h3>
+        <p>Your next walk or ride starts here.</p>
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="username" placeholder="you@example.com" />
         <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password" placeholder="At least 12 characters" />
+        <div class="password-field">
+          <input id="password" type="password" autocomplete="current-password" placeholder="At least 12 characters" />
+          <button id="btn-password" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+        </div>
         <button id="btn-register">Create account</button>
-        <button id="btn-login" class="ghost">I already have one</button>
+        <button id="btn-login" class="ghost">Sign in to my account</button>
         <p class="note" id="account-state">Not signed in.</p>
       </div>
     </section>
 
     <!-- ---------- Today ---------- -->
     <section id="screen-today" class="screen">
-      <h2>Your profile</h2>
+      <div class="screen-heading">
+        <span class="eyebrow">Made for your everyday</span>
+        <h2>Your day, your pace.</h2>
+        <p>Tell us what works for you. We'll help you find a place to start.</p>
+      </div>
+      <div class="profile-layout">
+      <details class="profile-editor" id="profile-editor" open>
+      <summary>01 / Your profile</summary>
       <div class="card">
+        <h3>Make it personal</h3>
+        <p>Your activity preferences and abilities help shape your recommendations.</p>
         <div class="pair">
           <div><label for="age">Age</label><input id="age" type="number" value="34" min="13" max="120" /></div>
           <div><label for="sex">Sex</label><select id="sex">
@@ -273,7 +412,7 @@
           <option value="type2">Type 2</option><option value="prefer_not_to_say">Prefer not to say</option>
         </select>
 
-        <h3 style="font-size:14px;margin:14px 0 8px">Getting around</h3>
+        <h3 class="section-divider">Getting around</h3>
         <p style="margin-bottom:8px">This is what decides how hard the route engine works to
            avoid steps, hills and busy crossings for you.</p>
         <label for="mobility_limitations">Mobility limitations</label>
@@ -292,22 +431,61 @@
         </div>
         <button id="btn-profile">Save profile</button>
       </div>
-
-      <h2>Today's activity</h2>
+      </details>
+      <aside class="activity-panel">
+      <div class="step-label">02 / Your next step</div>
       <div class="card">
+        <h3>Today's activity</h3>
+        <p>Save your profile, then find an activity and duration matched to you.</p>
+        <label for="activity-choice">For this session</label>
+        <select id="activity-choice">
+          <option value="">Recommend an activity for me</option>
+          <option value="walk">Walking</option>
+          <option value="cycle">Cycling</option>
+        </select>
         <button id="btn-recommend">Get my recommendation</button>
         <div id="recommendation-out"></div>
+      </div>
+      <p class="note">Start where you are. You can update your profile as your routine changes.</p>
+      </aside>
       </div>
     </section>
 
     <!-- ---------- Route ---------- -->
-    <section id="screen-route" class="screen">
-      <div id="map"></div>
+    <section id="screen-route" class="screen" data-panel="map">
+      <div class="screen-heading">
+        <span class="eyebrow">A change of scenery</span>
+        <h2>Find your route</h2>
+        <p>Choose a starting point, compare your routes, and find your favourite way around.</p>
+      </div>
+      <div class="route-context" id="route-context">Start with an activity recommendation in Today.</div>
+      <div id="route-error" class="banner mock" role="alert" hidden></div>
+      <div class="mobile-route-switch" role="group" aria-label="Route view">
+        <button id="btn-route-map" aria-pressed="true">Map &amp; start point</button>
+        <button id="btn-route-list" aria-pressed="false">Routes &amp; activity</button>
+      </div>
+      <div class="route-layout">
+      <div class="map-panel">
+      <div id="map" aria-label="Route map"></div>
+      <div class="location-controls">
       <button id="btn-locate" class="ghost">Use my current location</button>
       <p class="note" id="start-state">Tap the map, or use your current location, to set a start point.</p>
+      <details class="session-tools">
+        <summary>Enter another starting location</summary>
+        <div class="pair">
+          <div><label for="start-latitude">Latitude</label><input id="start-latitude" type="number" min="-90" max="90" step="any" placeholder="40.7128" /></div>
+          <div><label for="start-longitude">Longitude</label><input id="start-longitude" type="number" min="-180" max="180" step="any" placeholder="-74.0060" /></div>
+        </div>
+        <button id="btn-coordinates" class="quiet">Use this starting point</button>
+      </details>
       <button id="btn-options" disabled style="margin-top:10px">Find my routes</button>
-      <div id="options-out"></div>
-
+      </div>
+      </div>
+      <div class="route-sidebar">
+      <div class="step-label">Your route options</div>
+      <div id="options-out"><div class="empty-state"><b>A good route starts with you.</b>Get a recommendation in Today, then set your starting point on the map to find routes.</div></div>
+      </div>
+      </div>
       <div id="session-card" class="card" hidden>
         <h3>Your session</h3>
         <div id="session-out"></div>
@@ -315,11 +493,14 @@
         <div id="track-out" class="stats" hidden></div>
         <button id="btn-recentre" class="quiet" style="margin-top:8px" hidden>Recentre on me</button>
         <p class="note" id="track-note"></p>
+        <details class="session-tools">
+        <summary>Route tools</summary>
         <div class="side-by-side" style="margin-top:10px">
           <button id="btn-maps" class="quiet">Open in Maps</button>
           <button id="btn-gpx" class="quiet">Download GPX</button>
         </div>
         <p class="note" id="handoff-note"></p>
+        </details>
         <div class="side-by-side" style="margin-top:6px">
           <button id="btn-complete">Finish</button>
           <button id="btn-abandon" class="danger">Abandon</button>
@@ -329,20 +510,25 @@
 
     <!-- ---------- Progress ---------- -->
     <section id="screen-progress" class="screen">
-      <h2>Your progress</h2>
+      <div class="screen-heading">
+        <span class="eyebrow">Every little bit adds up</span>
+        <h2>Your progress</h2>
+        <p>Your completed activities, time outside, and small wins along the way.</p>
+      </div>
       <div id="progress-out" class="stats"></div>
+      <div id="simulation-progress" class="card" hidden></div>
       <button id="btn-progress" class="quiet" style="margin-top:12px">Refresh</button>
       <p class="note">Map data &copy; OpenStreetMap contributors.</p>
     </section>
   </main>
 
-  <nav id="tabs" hidden>
-    <button data-screen="today" aria-selected="true"><span class="glyph">☀</span>Today</button>
-    <button data-screen="route" aria-selected="false"><span class="glyph">◎</span>Route</button>
-    <button data-screen="progress" aria-selected="false"><span class="glyph">▤</span>Progress</button>
+  <nav id="tabs" aria-label="Main navigation" hidden>
+    <button data-screen="today" aria-current="page"><span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></span>Today</button>
+    <button data-screen="route"><span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M5 19c0-8 14 2 14-7S5 13 5 5"/><circle cx="5" cy="4" r="2"/><circle cx="5" cy="20" r="2"/></svg></span>Route</button>
+    <button data-screen="progress"><span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M6 16v-4m6 4V8m6 8V4"/></svg></span>Progress</button>
   </nav>
 
-  <div id="status"></div>
+  <div id="status" role="status" aria-live="polite" aria-atomic="true"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -353,9 +539,48 @@ let accessToken = null;
 let recommendation = null;
 let startPoint = null;
 let session = null;
+const simulatedSessions = [];
 
 const RANK_COLORS = ["#1a7f4b", "#a8620a", "#64717f"];
 const el = (id) => document.getElementById(id);
+
+let offeredContext = null;
+let routeRequestVersion = 0;
+let selectingRoute = false;
+
+function showRoutePanel(panel) {
+  el("screen-route").dataset.panel = panel;
+  el("btn-route-map").setAttribute("aria-pressed", String(panel === "map"));
+  el("btn-route-list").setAttribute("aria-pressed", String(panel === "routes"));
+  if (panel === "map" && map) setTimeout(refreshMapView, 60);
+}
+function mapIsVisible() {
+  const screen = el("screen-route");
+  return screen.classList.contains("active") &&
+    (screen.dataset.panel === "map" || screen.classList.contains("is-journey"));
+}
+function refreshMapView() {
+  if (!map || !mapIsVisible()) return;
+  map.invalidateSize();
+  if (optionLines.length) focusOption(focusedOptionIndex);
+}
+function routeError(message) {
+  el("route-error").textContent = message;
+  el("route-error").hidden = !message;
+}
+el("btn-route-map").onclick = () => showRoutePanel("map");
+el("btn-route-list").onclick = () => showRoutePanel("routes");
+
+function invalidateOptions() {
+  routeError("");
+  routeRequestVersion++;
+  offeredContext = null;
+  el("options-out").innerHTML = '<div class="empty-state"><b>Ready for a fresh route?</b>Choose your start point and tap Find my routes.</div>';
+  if (!session || session.status !== "selected") {
+    if (routeLayer) routeLayer.clearLayers();
+    optionLines = [];
+  }
+}
 
 // The map is built defensively. Leaflet comes from a CDN, and if that fails —
 // offline demo, blocked network, flaky conference wifi — an exception here
@@ -386,7 +611,7 @@ function initMap() {
   });
   // Panning by hand means the user wants to look somewhere else; stop fighting
   // them for control of the viewport until they ask to be followed again.
-  map.on("dragstart", () => { if (watchId !== null) followMode = false; });
+  map.on("dragstart", () => { if (watchId !== null || simulationTimer !== null) followMode = false; });
 }
 
 // Surface a thrown error instead of leaving the user tapping a dead screen.
@@ -404,24 +629,19 @@ function showScreen(name) {
     else node.classList.remove("active");
   });
   document.querySelectorAll("#tabs button").forEach((tab) => {
-    tab.setAttribute("aria-selected", String(tab.dataset.screen === name));
+    if (tab.dataset.screen === name) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
   });
+  el("app-main").scrollTop = 0;
   // Leaflet measures its container on creation; a container that was hidden
   // then shown renders grey tiles until it is told to measure again.
-  if (name === "route" && map) setTimeout(() => map.invalidateSize(), 60);
+  if (name === "route" && map) setTimeout(refreshMapView, 60);
 }
 
 document.querySelectorAll("#tabs button").forEach((tab) => {
   tab.onclick = () => showScreen(tab.dataset.screen);
 });
 
-function tickClock() {
-  const now = new Date();
-  el("clock").textContent =
-    now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0");
-}
-tickClock();
-setInterval(tickClock, 20000);
 
 initMap();
 
@@ -440,6 +660,8 @@ function busy(button, task) {
       button.dataset.busy = "";
       button.disabled = false;
       button.classList.remove("is-busy");
+      if (session && session.status !== "selected" &&
+          (button === el("btn-complete") || button === el("btn-abandon"))) button.disabled = true;
     }
   };
 }
@@ -515,30 +737,58 @@ async function authenticate(path) {
 
 el("btn-register").onclick = busy(el("btn-register"), () => authenticate("/auth/register"));
 el("btn-login").onclick = busy(el("btn-login"), () => authenticate("/auth/login"));
+el("btn-password").onclick = () => {
+  const show = el("password").type === "password";
+  el("password").type = show ? "text" : "password";
+  el("btn-password").textContent = show ? "Hide" : "Show";
+  el("btn-password").setAttribute("aria-label", show ? "Hide password" : "Show password");
+  el("btn-password").setAttribute("aria-pressed", String(show));
+};
 
 el("btn-profile").onclick = busy(el("btn-profile"), async () => {
+  if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity before changing your profile.", true); return; }
   try {
     await api("/profile", { method: "PUT", body: profilePayload() });
+    recommendation = null;
+    invalidateOptions();
+    el("btn-options").disabled = true;
+    el("recommendation-out").innerHTML = "";
+    el("route-context").textContent = "Profile updated. Get a new recommendation in Today.";
+    el("profile-editor").open = false;
     toast("Profile saved.");
   } catch (error) { toast(error.message, true); }
 });
 
 el("btn-recommend").onclick = busy(el("btn-recommend"), async () => {
+  if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity before starting another.", true); return; }
   try {
-    recommendation = await api("/activity/recommendation", { method: "POST" });
+    recommendation = await api("/activity/recommendation", {
+      method: "POST", body: {activity_type: el("activity-choice").value || null},
+    });
+    invalidateOptions();
+    el("route-context").textContent = recommendation.activity_type + " · " + recommendation.duration_minutes + " minutes · round trip";
     el("recommendation-out").innerHTML =
       '<h3 style="margin-top:12px">' + esc(recommendation.activity_type) + " &middot; " +
       esc(recommendation.duration_minutes) + " minutes</h3>" +
       "<p>" + esc(recommendation.rationale) + "</p>" +
       '<button id="btn-goroute" class="ghost">Find a route for this</button>' +
       '<p class="disclaimer">' + esc(recommendation.disclaimer) + "</p>";
-    el("btn-goroute").onclick = () => showScreen("route");
+    el("btn-goroute").onclick = () => {
+      showRoutePanel("map");
+      showScreen("route");
+      if (!startPoint) el("start-state").textContent = "Choose a starting point: tap the map, use your location, or enter coordinates. Then tap Find my routes.";
+    };
     el("btn-options").disabled = !startPoint;
     toast("Recommendation ready.");
   } catch (error) { toast(error.message, true); }
 });
 
 function setStartPoint(lat, lon, accuracyMetres, label) {
+  if (selectingRoute || (session && session.status === "selected")) {
+    toast("Finish or abandon your current activity before changing the start point.", true);
+    return;
+  }
+  invalidateOptions();
   startPoint = { latitude: lat, longitude: lon };
 
   if (startMarker) startMarker.remove();
@@ -558,6 +808,19 @@ function setStartPoint(lat, lon, accuracyMetres, label) {
     (accuracyMetres ? " (accurate to ~" + Math.round(accuracyMetres) + " m)" : "");
   el("btn-options").disabled = !recommendation;
 }
+
+el("btn-coordinates").onclick = () => {
+  const latitude = el("start-latitude").value.trim();
+  const longitude = el("start-longitude").value.trim();
+  const lat = Number(latitude), lon = Number(longitude);
+  if (!latitude || !longitude || !Number.isFinite(lat) || !Number.isFinite(lon) ||
+      lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    toast("Enter latitude between -90 and 90 and longitude between -180 and 180.", true);
+    return;
+  }
+  setStartPoint(lat, lon, null, "Chosen start");
+  if (map && startPoint && startPoint.latitude === lat && startPoint.longitude === lon) map.setView([lat, lon], 15);
+};
 
 // Browser geolocation only works in a secure context: HTTPS, or localhost —
 // which is why the demo is served from the API's own origin on localhost. Over
@@ -600,6 +863,7 @@ el("btn-locate").onclick = () => {
 };
 
 let optionLines = [];
+let focusedOptionIndex = 0;
 
 function drawOptions(options) {
   if (!map) return;
@@ -618,12 +882,13 @@ function drawOptions(options) {
     optionLines.push(line);
     option.geometry.forEach((point) => bounds.push(point));
   });
-  if (bounds.length) map.flyToBounds(L.latLngBounds(bounds).pad(0.2), { duration: 0.7 });
+  if (bounds.length && mapIsVisible()) map.flyToBounds(L.latLngBounds(bounds).pad(0.2), { duration: 0.7 });
 }
 
 // Tapping a route card brings that route forward on the map and fades the
 // others, so comparing three overlapping loops is possible at a glance.
 function focusOption(index) {
+  focusedOptionIndex = index;
   optionLines.forEach((line, i) => {
     line.setStyle({
       weight: i === index ? 7 : 3,
@@ -635,22 +900,27 @@ function focusOption(index) {
     if (i === index) card.classList.add("focused");
     else card.classList.remove("focused");
   });
-  if (map && optionLines[index] && optionLines[index].getBounds) {
+  if (map && mapIsVisible() && optionLines[index] && optionLines[index].getBounds) {
     map.flyToBounds(optionLines[index].getBounds().pad(0.25), { duration: 0.5 });
   }
 }
 
 el("btn-options").onclick = busy(el("btn-options"), async () => {
+  if (!recommendation || !startPoint) { toast("Get a recommendation and choose a start point first.", true); return; }
+  if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity first.", true); return; }
+  const context = {activity_recommendation_id: recommendation.id, latitude: startPoint.latitude, longitude: startPoint.longitude};
+  invalidateOptions();
+  const version = routeRequestVersion;
   try {
     const data = await api("/route/options", {
       method: "POST",
-      body: {
-        activity_recommendation_id: recommendation.id,
-        latitude: startPoint.latitude,
-        longitude: startPoint.longitude,
-      },
+      body: context,
     });
+    if (version !== routeRequestVersion) return;
+    if (!Array.isArray(data.options)) throw new Error("The routing response is incomplete. Restart the API and try again.");
+    offeredContext = {...context, options: data.options};
     drawOptions(data.options);
+    showRoutePanel("routes");
 
     const isReal = data.provider === "ors";
     const banner = isReal
@@ -679,9 +949,11 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
       '<span class="score">' + esc(option.score) + "</span></div>" +
       '<div class="chips"><span class="chip">' + (option.distance_m / 1000).toFixed(2) + " km</span>" +
       '<span class="chip">' + Math.round(option.estimated_minutes) + " min</span>" +
-      '<span class="chip">' + Math.round((option.score_breakdown.step_free || 0) * 100) + "% step-free</span></div>" +
+      '<span class="chip">' + ((option.unverified || []).includes("stairs") ? "Steps unverified" :
+        option.score_breakdown.step_free === 1 ? "No steps reported" : "Includes steps") + "</span></div>" +
       '<p class="why">' + esc(option.explanation) + "</p>" +
-      '<button data-select="' + esc(option.label) + '">Choose this route</button></div>'
+      '<button data-select="' + esc(option.label) + '">Choose this route</button>' +
+      '<button class="quiet" data-simulate="' + esc(option.label) + '">Try a simulated journey</button></div>'
     ).join("");
 
     el("options-out").querySelectorAll("[data-select]").forEach((button, index) => {
@@ -694,6 +966,9 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
         };
       }
     });
+    el("options-out").querySelectorAll("[data-simulate]").forEach((button) => {
+      button.onclick = busy(button, () => selectRoute(button.dataset.simulate, true));
+    });
     focusOption(0);
     if (!data.options.length) {
       el("options-out").innerHTML +=
@@ -703,48 +978,79 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
     } else {
       toast(data.options.length + " routes scored for you.");
     }
-  } catch (error) { toast(error.message, true); }
+  } catch (error) {
+    if (version !== routeRequestVersion) return;
+    routeError(error.message);
+    toast(error.message, true);
+  }
 });
 
-async function selectRoute(label) {
+async function selectRoute(label, simulate = false) {
+  if (!offeredContext) { toast("Find routes again before choosing one.", true); return; }
+  if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity first.", true); return; }
+  const option = offeredContext.options.find(item => item.label === label);
+  if (!option) return;
+  const context = offeredContext;
+  selectingRoute = true;
   try {
-    session = await api("/route/select", {
+    session = simulate ? {
+      id: null, simulated: true, status: "selected", route_geometry: option.geometry,
+      distance_m: option.distance_m, estimated_minutes: Math.round(option.estimated_minutes),
+      activity_recommendation_id: context.activity_recommendation_id,
+    } : await api("/route/select", {
       method: "POST",
       body: {
-        activity_recommendation_id: recommendation.id,
-        latitude: startPoint.latitude,
-        longitude: startPoint.longitude,
+        activity_recommendation_id: context.activity_recommendation_id,
+        latitude: context.latitude,
+        longitude: context.longitude,
         candidate_label: label,
+        candidate_revision: option.candidate_revision,
       },
     });
     el("session-card").hidden = false;
+    resetJourney();
+    invalidateOptions();
+    showRoutePanel("map");
     renderSession();
     if (map) {
       optionLines = [];
       routeLayer.clearLayers();
       L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
     }
-    toast("Route selected. Ready when you are.");
+    toast(simulate ? "Simulation selected. No real activity will be recorded." : "Route selected. Ready when you are.");
     refreshProgress();
-  } catch (error) { toast(error.message, true); }
+  } catch (error) { invalidateOptions(); toast(error.message, true); }
+  finally { selectingRoute = false; }
 }
 
 function renderSession() {
   el("session-out").innerHTML =
-    '<div class="chips" style="margin-bottom:12px"><span class="chip">' + esc(session.status) + "</span>" +
+    '<div class="chips" style="margin-bottom:12px"><span class="chip">' + (session.simulated ? "Simulation · " : "") + esc(session.status) + "</span>" +
     '<span class="chip">' + (session.distance_m / 1000).toFixed(2) + " km</span>" +
     '<span class="chip">' + esc(session.estimated_minutes) + " min</span></div>";
   const terminal = session.status === "completed" || session.status === "abandoned";
   el("btn-complete").disabled = terminal;
   el("btn-abandon").disabled = terminal;
   el("btn-track").disabled = terminal;
+  el("btn-track").textContent = session.simulated ? "Start simulation" : "Start activity";
+  el("btn-gpx").disabled = Boolean(session.simulated);
+  if (session.simulated) el("track-note").textContent = "Demo only: follows the selected route automatically. It does not use GPS or count as real exercise.";
 }
 
 async function updateSession(status) {
+  if (!session || session.status !== "selected") return;
   try {
-    session = await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status } });
+    if (session.simulated) {
+      session.status = status;
+      if (status === "completed") simulatedSessions.push({...session});
+      renderSimulationProgress();
+    } else {
+      session = await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status } });
+    }
     stopTracking();
     renderSession();
+    el("screen-route").classList.remove("is-journey");
+    showRoutePanel("map");
     toast("Session " + status + ".");
     refreshProgress();
     if (status === "completed") showScreen("progress");
@@ -768,6 +1074,37 @@ let lastFix = null;
 let meMarker = null;
 let travelledLine = null;
 let elapsedTimer = null;
+let simulationTimer = null;
+let simulationElapsedSeconds = 0;
+let simulationTravelled = 0;
+
+function enterJourney() {
+  el("screen-route").classList.add("is-journey");
+  showScreen("route");
+  showRoutePanel("map");
+  el("app-main").scrollTop = 0;
+}
+
+function resetJourney() {
+  stopTracking();
+  el("screen-route").classList.remove("is-journey");
+  trackStartedAt = null;
+  simulationElapsedSeconds = 0;
+  simulationTravelled = 0;
+  travelledMetres = 0;
+  lastFix = null;
+  if (travelledLine) { travelledLine.remove(); travelledLine = null; }
+  if (meMarker) { meMarker.remove(); meMarker = null; }
+  el("track-out").hidden = true;
+  el("track-note").textContent = "";
+}
+
+function renderSimulationProgress() {
+  const box = el("simulation-progress");
+  box.hidden = !simulatedSessions.length;
+  box.innerHTML = '<h3>Demo progress</h3><p>' + simulatedSessions.length +
+    ' simulated activities completed in this tab. These are separate from your real activity totals and disappear when this page reloads.</p>';
+}
 
 // Fixes worse than this are still drawn, but are not counted towards distance:
 // GPS noise while standing still otherwise accumulates a fictional kilometre.
@@ -785,7 +1122,7 @@ function metresBetween(a, b) {
 }
 
 function renderTrackStats() {
-  const seconds = Math.round((Date.now() - trackStartedAt) / 1000);
+  const seconds = session && session.simulated ? Math.round(simulationElapsedSeconds) : Math.round((Date.now() - trackStartedAt) / 1000);
   const minutes = Math.floor(seconds / 60);
   const target = recommendation ? recommendation.duration_minutes : 0;
   const pace = travelledMetres > 50 && seconds > 0
@@ -795,7 +1132,7 @@ function renderTrackStats() {
     '<div class="stat"><b>' + value + "</b><span>" + caption + "</span></div>";
 
   el("track-out").innerHTML =
-    stat(minutes + ":" + String(seconds % 60).padStart(2, "0"), "elapsed" + (target ? " of " + target + " min" : "")) +
+    stat(minutes + ":" + String(seconds % 60).padStart(2, "0"), (session && session.simulated ? "simulated time" : "elapsed") + (target ? " of " + target + " min" : "")) +
     stat((travelledMetres / 1000).toFixed(2) + " km", "distance moved") +
     stat(pace, "pace") +
     stat(Math.round(Math.min(100, target ? (seconds / 60 / target) * 100 : 0)) + "%", "of target time");
@@ -841,14 +1178,16 @@ async function requestWakeLock() {
 }
 
 function stopTracking() {
+  if (simulationTimer !== null) { clearInterval(simulationTimer); simulationTimer = null; }
   if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
-  el("btn-track").textContent = "Start activity";
+  el("btn-track").textContent = session && session.simulated ? "Start simulation" : "Start activity";
   el("btn-recentre").hidden = true;
 }
 
 function startTracking() {
+  if (!session || session.status !== "selected") return;
   if (!navigator.geolocation) { toast("This browser has no geolocation support.", true); return; }
   if (!window.isSecureContext) {
     toast("Live tracking needs HTTPS or localhost.", true);
@@ -856,6 +1195,7 @@ function startTracking() {
   }
 
   followMode = true;
+  enterJourney();
   trackStartedAt = Date.now();
   travelledMetres = 0;
   lastFix = null;
@@ -884,7 +1224,68 @@ function startTracking() {
   requestWakeLock();
 }
 
-el("btn-track").onclick = () => (watchId === null ? startTracking() : stopTracking());
+function startSimulation() {
+  if (!session || !session.simulated || session.status !== "selected") return;
+  const geometry = session.route_geometry || [];
+  if (geometry.length < 2) { toast("This route has no geometry to simulate.", true); return; }
+  stopTracking();
+  enterJourney();
+  followMode = true;
+  const segments = [];
+  let total = 0;
+  for (let i = 1; i < geometry.length; i++) {
+    const length = metresBetween(geometry[i - 1], geometry[i]);
+    if (length > 0) {
+      segments.push({from: geometry[i - 1], to: geometry[i], start: total, length});
+      total += length;
+    }
+  }
+  if (!total) { toast("This route has no distance to simulate.", true); return; }
+  if (simulationTravelled >= total) simulationTravelled = 0;
+  if (!simulationTravelled) {
+    simulationElapsedSeconds = 0;
+    travelledMetres = 0;
+    if (travelledLine) travelledLine.remove();
+    travelledLine = map ? L.polyline([geometry[0]], {color: "#a8620a", weight: 4, dashArray: "6 6"}).addTo(map)
+      : {addLatLng() {}, remove() {}};
+  }
+  el("track-out").hidden = false;
+  el("btn-recentre").hidden = false;
+  el("btn-track").textContent = "Pause simulation";
+  el("track-note").textContent = "SIMULATION · The marker follows your selected route in about 20 seconds. No GPS or real exercise is recorded.";
+  renderTrackStats();
+  simulationTimer = setInterval(() => {
+    const previous = simulationTravelled;
+    simulationTravelled = Math.min(total, simulationTravelled + total / 80);
+    const segment = segments.find(item => item.start + item.length >= simulationTravelled) || segments[segments.length - 1];
+    const fraction = Math.min(1, (simulationTravelled - segment.start) / segment.length);
+    const point = segment.from.map((value, index) => value + (segment.to[index] - value) * fraction);
+    for (const item of segments) {
+      const end = item.start + item.length;
+      if (end > previous && end <= simulationTravelled) travelledLine.addLatLng(item.to);
+    }
+    travelledLine.addLatLng(point);
+    lastFix = point;
+    travelledMetres = session.distance_m * simulationTravelled / total;
+    simulationElapsedSeconds = session.estimated_minutes * 60 * simulationTravelled / total;
+    if (map) {
+      if (meMarker) meMarker.setLatLng(point);
+      else meMarker = L.circleMarker(point, {radius: 8, color: "#fff", weight: 2, fillColor: "#a8620a", fillOpacity: 1}).addTo(map);
+      if (followMode) map.panTo(point, {animate: true, duration: 0.2});
+    }
+    renderTrackStats();
+    if (simulationTravelled >= total) {
+      stopTracking();
+      el("track-note").textContent = "Simulation finished. Tap Finish to add it to demo progress. Your real exercise totals are unchanged.";
+    }
+  }, 250);
+}
+
+el("btn-track").onclick = () => {
+  if (watchId !== null || simulationTimer !== null) stopTracking();
+  else if (session && session.simulated) startSimulation();
+  else startTracking();
+};
 
 el("btn-recentre").onclick = () => {
   followMode = true;

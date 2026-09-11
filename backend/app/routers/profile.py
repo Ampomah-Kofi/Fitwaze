@@ -11,11 +11,14 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.profile import HealthProfile, apply_profile_data, profile_to_data
 from app.models.user import User
+from app.models.activity import ActivityRecommendation
+from app.models.session import ActivitySession
 from app.schemas.profile import HealthProfileResponse, HealthProfileUpsertRequest
 from app.security.deps import get_current_user
 
@@ -103,6 +106,10 @@ def delete_profile(
     if profile is not None:
         db.delete(profile)
 
+    # Remove dependent rows before the user; ORM backrefs otherwise attempt to
+    # null their non-nullable user_id instead of honoring database cascades.
+    db.execute(delete(ActivitySession).where(ActivitySession.user_id == current_user.id))
+    db.execute(delete(ActivityRecommendation).where(ActivityRecommendation.user_id == current_user.id))
     user = db.get(User, current_user.id)
     if user is not None:
         db.delete(user)  # cascades refresh_tokens via ORM relationship

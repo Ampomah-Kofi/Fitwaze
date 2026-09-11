@@ -103,6 +103,7 @@ _WALK_FACTOR_DESCRIPTIONS = {
 }
 
 _CYCLE_FACTOR_DESCRIPTIONS = {
+    "step_free": "avoids steps and stairs",
     "duration_match": "closely matches your target session length",
     "bike_lane_score": "stays on marked bike lanes",
     "traffic_stress_inv": "avoids high-stress traffic",
@@ -222,7 +223,8 @@ def personalised_weights(
 
 
 def _generate_explanation(
-    activity_type: ActivityTypeEnum, factor_values: dict[str, float], weights: dict[str, float]
+    activity_type: ActivityTypeEnum, factor_values: dict[str, float], weights: dict[str, float],
+    unknown_factors: frozenset[str] = frozenset(),
 ) -> str:
     descriptions = _WALK_FACTOR_DESCRIPTIONS if activity_type == ActivityTypeEnum.walk else _CYCLE_FACTOR_DESCRIPTIONS
     caveats = _WALK_FACTOR_CAVEATS if activity_type == ActivityTypeEnum.walk else _CYCLE_FACTOR_CAVEATS
@@ -230,14 +232,22 @@ def _generate_explanation(
     # Rank factors (excluding duration_match, which is about the request
     # rather than the route's built environment) by their weighted
     # contribution to highlight what actually drove the score.
+    # A factor with no weight or no wording is a bug in this module, but it must
+    # not become a 500 for someone asking for a walk: an unweighted factor
+    # simply contributes nothing, and one with no wording goes unmentioned.
+    # `test_route_engine.py` asserts the dicts agree, so the bug is caught there
+    # rather than in production.
     contributions = {
-        name: value * weights[name]
+        name: value * weights.get(name, 0.0)
         for name, value in factor_values.items()
-        if name != "duration_match"
+        if name != "duration_match" and name not in unknown_factors
     }
     ranked = sorted(contributions.items(), key=lambda kv: kv[1], reverse=True)
 
-    top_positives = [name for name, _ in ranked[:2] if factor_values[name] >= 0.5]
+    top_positives = [
+        name for name, _ in ranked[:2]
+        if factor_values[name] >= 0.5 and name in descriptions
+    ]
     sentence_parts = [descriptions[name] for name in top_positives]
 
     if sentence_parts:
@@ -245,7 +255,9 @@ def _generate_explanation(
     else:
         positive_sentence = "This route is a reasonable option based on the available route data."
 
-    weakest_name, weakest_value = min(factor_values.items(), key=lambda kv: kv[1] if kv[0] != "duration_match" else 1.0)
+    known = {name: value for name, value in factor_values.items()
+             if name != "duration_match" and name not in unknown_factors}
+    weakest_name, weakest_value = min(known.items(), key=lambda kv: kv[1], default=("", 1.0))
     caveat_sentence = ""
     if weakest_name in caveats and weakest_value < 0.4:
         caveat_sentence = " One tradeoff: it " + caveats[weakest_name] + "."
@@ -270,9 +282,19 @@ def score_route(
     weighted_score = sum(factor_values[name] * weight for name, weight in weights.items())
     score = round(weighted_score * 100, 1)
 
-    explanation = _generate_explanation(activity_type, factor_values, weights)
+    unknown_factors = frozenset(
+        "step_free" if name == "stairs" else
+        name + "_inv" if name in {"traffic_exposure", "major_crossings", "slope", "traffic_stress", "intersection_complexity"}
+        else name for name in route.unknown_attributes
+    )
+    explanation = _generate_explanation(activity_type, factor_values, weights, unknown_factors)
+    if unknown_factors:
+        explanation += " Some route attributes are unverified; the score includes neutral placeholders, not measured accessibility."
     if profile is not None and terrain_emphasis(profile, activity_type) > 1.0:
-        explanation += _terrain_note(factor_values)
+        if route.unknown_attributes & {"stairs", "slope"}:
+            explanation += " Steps or gradient are unverified, so suitability for your mobility needs cannot be confirmed."
+        else:
+            explanation += _terrain_note(factor_values)
 
     return RouteScoreResult(score=score, breakdown=factor_values, explanation=explanation)
 
@@ -281,7 +303,7 @@ def _terrain_note(factor_values: dict[str, float]) -> str:
     """One sentence saying how this route treats the terrain the person told us
     matters to them — stated plainly, and never repeating a stored health value
     back at them."""
-    steps_clear = factor_values.get("step_free", 1.0) >= 0.8
+    steps_clear = factor_values.get("step_free", 1.0) == 1.0
     gentle = factor_values.get("slope_inv", 1.0) >= 0.7
 
     if steps_clear and gentle:
@@ -349,6 +371,10 @@ def feasibility_problem(
     """
     if profile is None:
         return None
+
+    ability = profile.walking_ability if activity_type == ActivityTypeEnum.walk else profile.cycling_ability
+    if ability == AbilityEnum.unable:
+        return "requires an activity you reported being unable to do; update your profile and request a new recommendation"
 
     max_stairs, max_slope = _limits_for(profile, activity_type)
 
