@@ -165,3 +165,27 @@ test('route cards do not try to animate a hidden map', () => {
     showScreen('route'); showRoutePanel('routes'); focusOption(0);`);
   assert.equal(app.run('focusedOptionIndex'), 0);
 });
+
+test('concurrent expired-token requests share one refresh and retry with the new token', async () => {
+  let refreshes = 0;
+  const app = setup(async (url, options) => {
+    if (url === '/auth/refresh') {
+      refreshes++;
+      return {ok: true, json: async () => ({access_token: 'fresh-token'})};
+    }
+    if (options.headers.Authorization === 'Bearer expired-token') return {status: 401, ok: false};
+    assert.equal(options.headers.Authorization, 'Bearer fresh-token');
+    return response({ok: true});
+  });
+  app.run(`accessToken = 'expired-token'`);
+  await Promise.all([app.run(`api('/route/options', {method: 'POST', body: {}})`), app.run(`api('/progress')`)]);
+  assert.equal(refreshes, 1);
+});
+
+test('expired refresh session returns to sign-in while preserving the selected route', async () => {
+  const app = setup(async () => ({status: 401, ok: false}));
+  app.run(`accessToken = 'expired-token'; session = {id: 'keep-this-route', status: 'selected'};`);
+  await assert.rejects(app.run(`api('/progress')`), /renew your session/);
+  assert(app.nodes.get('screen-auth').classList.contains('active'));
+  assert.equal(app.run('session.id'), 'keep-this-route');
+});

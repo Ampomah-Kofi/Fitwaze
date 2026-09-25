@@ -43,3 +43,9 @@ docker-compose.override.yml
 
 # Alembic (keep migrations, ignore local sqlite artifacts only)
 *.db-journal
+
+# Local demo server output
+backend/demo-server*.log
+
+# Generated Claude upload bundles
+claude-upload/

@@ -536,6 +536,7 @@
 // The access token is held in a plain variable only, never localStorage, so it
 // does not outlive the tab and cannot be read back by anything else.
 let accessToken = null;
+let signedInUserId = null;
 let recommendation = null;
 let startPoint = null;
 let session = null;
@@ -681,11 +682,40 @@ function esc(value) {
   ));
 }
 
+let tokenRefresh = null;
+async function authenticatedFetch(path, options = {}) {
+  const sentToken = accessToken;
+  const send = () => fetch(path, {...options, credentials: "same-origin", headers: {
+    ...options.headers, ...(accessToken ? {Authorization: "Bearer " + accessToken} : {}),
+  }});
+  let response = await send();
+  if (response.status !== 401 || path.startsWith("/auth/") || !sentToken) return response;
+  if (accessToken === sentToken) {
+    if (!tokenRefresh) {
+      tokenRefresh = (async () => {
+        const refreshed = await fetch("/auth/refresh", {method: "POST", credentials: "same-origin"});
+        if (!refreshed.ok) {
+          if (refreshed.status === 401) {
+            accessToken = null;
+            el("tabs").hidden = true;
+            showScreen("auth");
+            el("account-state").textContent = "Please sign in again. Your current route is kept in this tab.";
+          }
+          throw new Error("Could not renew your session. Sign in again if requested, then retry.");
+        }
+        accessToken = (await refreshed.json()).access_token;
+      })().finally(() => { tokenRefresh = null; });
+    }
+    await tokenRefresh;
+  }
+  return send();
+}
+
 async function api(path, options) {
   const settings = options || {};
   const headers = { "Content-Type": "application/json" };
   if (accessToken) headers["Authorization"] = "Bearer " + accessToken;
-  const response = await fetch(path, {
+  const response = await authenticatedFetch(path, {
     method: settings.method || "GET",
     headers: headers,
     credentials: "same-origin",
@@ -695,7 +725,9 @@ async function api(path, options) {
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
     const detail = data && data.detail ? JSON.stringify(data.detail) : response.statusText;
-    throw new Error(response.status + ": " + detail);
+    const error = new Error(response.status + ": " + detail);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -724,10 +756,38 @@ async function authenticate(path) {
   if (!email || !password) { toast("Email and password are required.", true); return; }
   try {
     const data = await api(path, { method: "POST", body: { email: email, password: password } });
+    if (signedInUserId && signedInUserId !== data.user.id) {
+      resetJourney();
+      session = null;
+      recommendation = null;
+      startPoint = null;
+      simulatedSessions.length = 0;
+      renderSimulationProgress();
+      invalidateOptions();
+      if (startMarker) { startMarker.remove(); startMarker = null; }
+      if (accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
+      el("session-card").hidden = true;
+      el("recommendation-out").innerHTML = "";
+      el("progress-out").innerHTML = "";
+      el("btn-options").disabled = true;
+      el("route-context").textContent = "Start with an activity recommendation in Today.";
+      el("start-state").textContent = "Choose your starting point.";
+    }
+    signedInUserId = data.user.id;
     accessToken = data.access_token;
+    try {
+      const profile = await api("/profile");
+      for (const field of Object.keys(profilePayload())) {
+        if (profile[field] !== undefined) el(field).value = String(profile[field]);
+      }
+      el("profile-editor").open = false;
+    } catch (error) {
+      el("profile-editor").open = true;
+      if (error.status !== 404) toast("Signed in, but your saved profile could not be loaded. " + error.message, true);
+    }
     el("account-state").textContent = "Signed in as " + data.user.email;
     el("tabs").hidden = false;
-    showScreen("today");
+    showScreen(session && session.status === "selected" ? "route" : "today");
     toast("Signed in.");
     refreshProgress();
   } catch (error) {
@@ -1374,9 +1434,7 @@ el("btn-gpx").onclick = busy(el("btn-gpx"), async () => {
   if (!session) return;
   try {
     // Fetched rather than linked, because the endpoint needs the bearer token.
-    const response = await fetch("/route/sessions/" + session.id + "/gpx", {
-      headers: { Authorization: "Bearer " + accessToken },
-    });
+    const response = await authenticatedFetch("/route/sessions/" + session.id + "/gpx");
     if (!response.ok) throw new Error("GPX export failed (" + response.status + ")");
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);

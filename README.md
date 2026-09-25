@@ -16,6 +16,7 @@ later plug in real GIS/routing data via the `RouteProvider` interface described 
 
 The agreed product direction and demo acceptance flow are recorded in
 [the product brief](docs/PRODUCT_BRIEF.md).
+The latest logic and flow audit is in [the system review](docs/SYSTEM_REVIEW.md).
 
 ## Map & route data
 
@@ -283,6 +284,17 @@ FITWAZE/
 ```
 
 ## Quick start
+
+For the existing local SQLite demo, after installing backend dependencies and
+configuring `backend/.env`, run this from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File backend/start-demo.ps1
+```
+
+It preserves `backend/demo.db` and starts the API with automatic reload, so
+Python API changes stay in sync with the HTML. Stop an existing server on port
+8000 first, or pass `-Port 8001`. The PostgreSQL setup follows below.
 
 Requires Python 3.12 and Docker Desktop (or Docker Compose) for PostgreSQL/PostGIS.
 Run these commands from the repository root in PowerShell:
