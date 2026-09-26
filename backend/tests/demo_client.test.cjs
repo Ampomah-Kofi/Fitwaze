@@ -381,3 +381,19 @@ test('an Apple Maps handoff is reminded to head back at the turn-back point', ()
     travelledMetres = 600; checkTurnaround([33.5230, -86.8104]);`);
   assert.match(app.nodes.get('journey-alert-text').textContent, /Directions back to my start/);
 });
+
+test('progress shows the weekly ring against 150 minutes', () => {
+  const app = setup();
+  const ring = app.run('weekRing(60, 3)');
+  assert.match(ring, /90 more active minutes/);
+  assert.match(ring, /3 days in a row/);
+  assert.match(app.run('weekRing(160, 0)'), /Weekly goal reached/);
+});
+
+test('the greeting follows the time of day', () => {
+  const app = setup();
+  app.run('renderGreeting(new Date(2026, 8, 26, 7, 30))');
+  assert.equal(app.nodes.get('today-greeting').textContent, 'Good morning');
+  app.run('renderGreeting(new Date(2026, 8, 26, 19, 0))');
+  assert.equal(app.nodes.get('today-greeting').textContent, 'Good evening');
+});

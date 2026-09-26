@@ -345,7 +345,7 @@
   .chip.warn { background: #fdf3e7; color: var(--warn); border-color: #f1dcc0; }
   /* Messages appear under the app bar, where they never cover the button
      the person just pressed or the result it produced. */
-  #status { top: calc(78px + env(safe-area-inset-top)); bottom: auto !important; }
+  #status { top: calc(8px + env(safe-area-inset-top)); bottom: auto !important; z-index: 950; }
 
   /* The route screen is about the map: keep what sits above it short. */
   #screen-route .screen-heading { margin-bottom: 10px; }
@@ -488,6 +488,26 @@
   .plan-headline b { font-size: 40px; font-weight: 700; color: var(--accent); }
   .plan.hold { background: #ff3b3012; }
   .plan #btn-goroute { margin: 6px 0 14px; }
+  .ring-card { display: flex; align-items: center; gap: 18px; }
+  .ring-card:empty { display: none; }
+  .ring-wrap { position: relative; flex: none; width: 128px; height: 128px; }
+  .ring { width: 128px; height: 128px; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 16; stroke-linecap: round; }
+  .ring-track { stroke: #34c75926; }
+  .ring-fill { stroke: #34c759; transition: stroke-dasharray .8s cubic-bezier(.22, .61, .36, 1); }
+  .ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .ring-center b { font: 700 30px/1 ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif; color: var(--ink); }
+  .ring-center span { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .ring-text h3 { margin: 0 0 4px; }
+  .ring-text p { margin: 0 0 6px; }
+  .ring-text .streak { color: #c93400; font-weight: 600; }
+  .list-group { background: var(--card); border-radius: var(--radius); overflow: hidden; }
+  .list-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; min-height: 56px; }
+  .list-row + .list-row { border-top: .5px solid var(--line); }
+  .list-icon { width: 32px; height: 32px; border-radius: 8px; background: #34c75926; display: grid; place-items: center; font-size: 17px; flex: none; }
+  .list-main { flex: 1; display: grid; }
+  .list-main small { color: var(--muted); font-size: 13px; }
+  .list-value { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
   .unit-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .unit-field { position: relative; display: block; }
   .unit-field input { padding-right: 34px; }
@@ -744,9 +764,9 @@
     <!-- ---------- Today ---------- -->
     <section id="screen-today" class="screen">
       <div class="screen-heading">
-        <span class="eyebrow">Made for your everyday</span>
-        <h2>Your day, your pace.</h2>
-        <p>Tell us what works for you. We'll help you find a place to start.</p>
+        <span class="eyebrow" id="today-date">Today</span>
+        <h2 id="today-greeting">Your day, your pace.</h2>
+        <p>Check in, get today's plan, and find a walk near home.</p>
       </div>
       <div class="profile-layout">
       <details class="profile-editor" id="profile-editor" open>
@@ -975,7 +995,9 @@
         <p>Your completed activities, time outside, and small wins along the way.</p>
       </div>
       <div id="after-walk-out" class="card after-walk" hidden></div>
+      <div id="week-ring" class="card ring-card"></div>
       <div id="progress-out" class="stats"></div>
+      <div id="recent-out"></div>
       <div id="simulation-progress" class="card" hidden></div>
       <button id="btn-progress" class="quiet" style="margin-top:12px">Refresh</button>
       <p class="note">Map data &copy; OpenStreetMap contributors.</p>
@@ -2512,23 +2534,64 @@ el("btn-gpx").onclick = busy(el("btn-gpx"), async () => {
   } catch (error) { toast(error.message, true); }
 });
 
+// The weekly ring, Apple Fitness style: 150 active minutes a week is the
+// usual recommendation for adults, including people with type 2 diabetes.
+const WEEKLY_GOAL_MINUTES = 150;
+function weekRing(minutes, streak) {
+  const fraction = Math.min(1, (minutes || 0) / WEEKLY_GOAL_MINUTES);
+  const radius = 52, circumference = 2 * Math.PI * radius;
+  const left = Math.max(0, WEEKLY_GOAL_MINUTES - (minutes || 0));
+  return '<div class="ring-wrap"><svg viewBox="0 0 128 128" class="ring" role="img" aria-label="' +
+    esc(minutes || 0) + ' of ' + WEEKLY_GOAL_MINUTES + ' minutes this week">' +
+    '<circle cx="64" cy="64" r="' + radius + '" class="ring-track"/>' +
+    '<circle cx="64" cy="64" r="' + radius + '" class="ring-fill" stroke-dasharray="' +
+    (circumference * fraction).toFixed(1) + " " + circumference.toFixed(1) + '"/></svg>' +
+    '<div class="ring-center"><b>' + esc(minutes || 0) + "</b><span>of " + WEEKLY_GOAL_MINUTES + " min</span></div></div>" +
+    '<div class="ring-text"><h3>This week</h3><p>' +
+    (left ? esc(left) + " more active minutes reaches this week's goal." : "Weekly goal reached. Well done!") +
+    "</p>" + (streak ? '<p class="streak">' + esc(streak) + (streak === 1 ? " day" : " days") + " in a row</p>" : "") + "</div>";
+}
+
+function recentList(sessions) {
+  const done = sessions.filter((item) => item.status === "completed").slice(0, 5);
+  if (!done.length) return "";
+  return '<div class="step-label">Recent activity</div><div class="list-group">' + done.map((item) => {
+    const when = new Date(item.completed_at || item.created_at);
+    let day = "";
+    try { day = when.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); } catch (error) {}
+    return '<div class="list-row"><span class="list-icon">' + (item.activity_type === "cycle" ? "🚲" : "🚶") + "</span>" +
+      "<span class=\"list-main\"><b>" + (item.activity_type === "cycle" ? "Ride" : "Walk") + "</b><small>" + esc(day) + "</small></span>" +
+      "<span class=\"list-value\">" + esc(item.estimated_minutes) + " min · " + distanceText(item.distance_m) + " " + UNIT + "</span></div>";
+  }).join("") + "</div>";
+}
+
 async function refreshProgress() {
   if (!accessToken) return;
   try {
     const progress = await api("/progress");
     const stat = (value, caption) =>
       '<div class="stat"><b>' + esc(value) + "</b><span>" + caption + "</span></div>";
+    el("week-ring").innerHTML = weekRing(progress.last_7_days_minutes, progress.current_streak_days);
     el("progress-out").innerHTML =
-      stat(progress.sessions_completed + " / " + progress.sessions_selected, "sessions completed") +
-      stat(Math.round(progress.completion_rate * 100) + "%", "completion rate") +
+      stat(progress.sessions_completed, progress.sessions_completed === 1 ? "activity done" : "activities done") +
       stat(distanceText(progress.total_distance_m) + " " + UNIT, "distance covered") +
-      stat(progress.total_active_minutes, "active minutes") +
-      stat(progress.last_7_days_minutes, "minutes, last 7 days") +
-      stat(progress.current_streak_days, "day streak");
+      stat(progress.total_active_minutes, "active minutes in all") +
+      stat(Math.round(progress.completion_rate * 100) + "%", "of started routes finished");
+    el("recent-out").innerHTML = recentList(progress.recent_sessions || []);
   } catch (error) { toast(error.message, true); }
 }
 
 el("btn-progress").onclick = busy(el("btn-progress"), refreshProgress);
+
+// --- Greeting ------------------------------------------------------------------
+function renderGreeting(now = new Date()) {
+  const hour = now.getHours();
+  el("today-greeting").textContent = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  try {
+    el("today-date").textContent = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  } catch (error) { el("today-date").textContent = "Today"; }
+}
+renderGreeting();
 </script>
 </body>
 </html>
