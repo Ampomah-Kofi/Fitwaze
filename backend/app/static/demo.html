@@ -1335,7 +1335,9 @@ function routeChips(option) {
     chips.push(factors.slope_inv >= 0.75 ? ["good", "Flat"] :
       factors.slope_inv >= 0.45 ? ["", "Gentle hills"] : ["warn", "Hilly"]);
   }
-  if (typeof environment.ascent_m === "number") chips.push(["", Math.round(environment.ascent_m) + " m climb"]);
+  if (typeof environment.ascent_m === "number") {
+    chips.push(["", USE_MILES ? Math.round(environment.ascent_m * 3.281) + " ft climb" : Math.round(environment.ascent_m) + " m climb"]);
+  }
   chips.push(unverified.includes("stairs") ? ["", "Steps unverified"] :
     factors.step_free === 1 ? ["good", "Step-free"] : ["warn", "Includes steps"]);
   const traffic = factors.traffic_exposure_inv !== undefined ? "traffic_exposure" : "traffic_stress";
@@ -1425,7 +1427,7 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
       ors: '<div class="banner real">Routes along real streets and paths near you, checked for ' +
         "hills, steps, traffic and greenery.</div>",
       osrm: '<div class="banner real">Routes along real streets and paths near you, from ' +
-        "OpenStreetMap. Hills and surroundings are not measured by this route source.</div>",
+        "OpenStreetMap, with hills checked against USGS elevation data.</div>",
     };
     const banner = banners[data.provider] ||
       '<div class="banner mock">Practice routes: sample shapes that do not follow real streets. ' +
@@ -1442,8 +1444,8 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
       : "";
 
     const unverified = data.options.some((option) => (option.unverified || []).length)
-      ? '<p class="note">Some surface details (steps, gradient, pavements) are not ' +
-        "available from this route provider, so they are estimated rather than surveyed.</p>"
+      ? '<p class="note">Details marked "unverified" (such as steps or pavements) are not ' +
+        "available from this route source, so they are estimated rather than surveyed.</p>"
       : "";
 
     el("options-out").innerHTML = banner + withheld + unverified + data.options.map((option, index) =>
