@@ -572,6 +572,101 @@
   .turn-flag { width: 34px; height: 34px; border-radius: 50%; background: #ff9500; border: 3px solid #fff;
     box-shadow: 0 3px 10px #0004; display: grid; place-items: center; color: #1c1c1e; font-weight: 800; font-size: 16px; }
 
+  /* ======================================================================
+     Dark glass over the map, the way Apple Maps draws controls in motion:
+     translucent black, heavy blur, white type. Everything on the page
+     stays light; only what floats on the map goes dark.
+     ====================================================================== */
+  :root { --glass: rgba(22, 22, 24, .72); --glass-strong: rgba(22, 22, 24, .84); --glass-line: rgba(255, 255, 255, .12);
+    --glass-fill: rgba(255, 255, 255, .1); --glass-ink: #ffffff; --glass-muted: rgba(235, 235, 245, .6); }
+  .glass, #screen-route.is-journey #session-card, .mini-stats, .sheet-tab, .map-fab, .locate-fab, .help-sheet {
+    -webkit-backdrop-filter: saturate(180%) blur(28px); backdrop-filter: saturate(180%) blur(28px);
+  }
+  #screen-route.is-journey #session-card { background: var(--glass) !important; color: var(--glass-ink);
+    border: .5px solid var(--glass-line); box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
+  #screen-route.is-journey #session-card h3 { color: var(--glass-ink); }
+  #screen-route.is-journey #session-card .note, #screen-route.is-journey #session-card .session-tools summary { color: var(--glass-muted); }
+  #screen-route.is-journey #session-card .chip { background: var(--glass-fill); color: var(--glass-ink); }
+  #screen-route.is-journey #track-out .stat { background: var(--glass-fill); }
+  #screen-route.is-journey #track-out .stat b { color: var(--glass-ink); }
+  #screen-route.is-journey #track-out .stat span { color: var(--glass-muted); }
+  #screen-route.is-journey .goal-bar { background: var(--glass-fill); }
+  #screen-route.is-journey #session-card button.quiet { background: var(--glass-fill); color: var(--glass-ink); }
+  #screen-route.is-journey #session-card button.ghost { background: rgba(48, 209, 88, .2); color: #30d158; }
+  #screen-route.is-journey #session-card button.danger { background: rgba(255, 69, 58, .2); color: #ff453a; }
+  #screen-route.is-journey .sheet-hide { background: var(--glass-fill); color: var(--glass-ink); }
+  #screen-route.is-journey .sheet-grip { background: rgba(255, 255, 255, .3); }
+  #screen-route.is-journey .back-home { background: rgba(48, 209, 88, .2); color: #30d158; }
+  .mini-stats, .sheet-tab { background: var(--glass) !important; color: var(--glass-ink) !important; border: .5px solid var(--glass-line); }
+  .mini-stats span { color: var(--glass-muted) !important; }
+  .map-fab { background: var(--glass) !important; color: #64d2ff !important; border: .5px solid var(--glass-line) !important; }
+
+  .locate-fab { position: absolute; right: 12px; top: 12px; z-index: 880; width: 48px; min-height: 48px; height: 48px; padding: 0;
+    margin: 0; border-radius: 14px; background: var(--glass); color: #64d2ff; border: .5px solid var(--glass-line);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .25); display: grid; place-items: center; }
+  .locate-fab svg { width: 22px; height: 22px; }
+  .map-panel { position: relative; }
+  #screen-route.is-journey .locate-fab { display: none; }
+
+  .unwell-fab { position: absolute; left: 12px; top: 12px; z-index: 880; width: auto; min-height: 44px; margin: 0;
+    padding: 10px 16px; border-radius: 999px; font-size: 15px; background: rgba(255, 69, 58, .9); color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .25); }
+  .unwell-fab[hidden] { display: none; }
+  #screen-route:not(.is-journey) .unwell-fab { display: none; }
+
+  .help-sheet { position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 910;
+    padding: 20px 18px 14px; border-radius: 24px; background: var(--glass-strong); color: var(--glass-ink);
+    border: .5px solid var(--glass-line); box-shadow: 0 20px 60px rgba(0, 0, 0, .45); max-height: 86%; overflow-y: auto;
+    animation: sheet-up .35s cubic-bezier(.22, .61, .36, 1) both; }
+  .help-sheet[hidden] { display: none; }
+  .help-sheet h3 { margin: 0 0 6px; font-size: 22px; color: var(--glass-ink); }
+  .help-sheet p, .help-sheet li { color: rgba(235, 235, 245, .82); font-size: 15px; line-height: 1.45; }
+  .help-sheet ol { padding-left: 20px; margin: 8px 0 10px; display: grid; gap: 6px; }
+  .help-urgent { color: #ff9f0a !important; font-weight: 600; }
+  .help-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .help-btn { display: grid; place-items: center; min-height: 50px; margin: 0; padding: 10px; border-radius: 14px; border: 0;
+    background: #30d158; color: #002b0f; font: inherit; font-size: 16px; font-weight: 600; text-decoration: none; text-align: center; }
+  .help-btn[hidden] { display: none; }
+  .help-btn.danger-btn { background: #ff453a; color: #fff; }
+  .help-btn.quiet-btn { background: var(--glass-fill); color: var(--glass-ink); }
+  .finish-sheet label { color: var(--glass-muted); }
+  .finish-sheet input, .finish-sheet select { background: var(--glass-fill); color: var(--glass-ink); }
+  .finish-sheet .segmented { background: var(--glass-fill); }
+  .finish-sheet .segmented button { color: var(--glass-ink); }
+  .finish-sheet .segmented button[aria-pressed="true"] { background: rgba(255, 255, 255, .9); color: #1c1c1e; }
+  .finish-sheet button.quiet { background: var(--glass-fill); color: var(--glass-ink); margin-top: 8px; }
+  .segmented-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @keyframes sheet-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+  .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px;
+    border-radius: 12px; background: var(--fill); color: var(--ink); font-size: 15px; font-weight: 500; margin-bottom: 14px; cursor: pointer; }
+  .switch-row small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 3px; line-height: 1.35; }
+  .switch { -webkit-appearance: none; appearance: none; flex: none; width: 51px !important; height: 31px; min-height: 0 !important;
+    margin: 0 !important; padding: 0; border-radius: 31px; background: #e9e9eb !important; position: relative; cursor: pointer;
+    transition: background .25s ease; box-shadow: none !important; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+    background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .15), 0 1px 1px rgba(0, 0, 0, .16); transition: transform .25s cubic-bezier(.22, .61, .36, 1); }
+  .switch:checked { background: #34c759 !important; }
+  .switch:checked::after { transform: translateX(20px); }
+
+  .weather-card { border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; display: grid; gap: 4px; }
+  .weather-card b { font-size: 17px; }
+  .weather-card span { font-size: 14px; line-height: 1.4; }
+  .weather-card.ok { background: #34c7591a; color: #1f7a35; }
+  .weather-card.caution, .weather-card.cold { background: #ff95001f; color: #8a4500; }
+  .weather-card.extreme_caution { background: #ff950033; color: #7a3a00; }
+  .weather-card.danger { background: #ff3b3022; color: #b3000f; }
+  .after-walk { background: #34c7591a; }
+  .after-walk p { color: var(--ink); }
+  /* Classes that set display must still yield to the hidden attribute. */
+  .mini-stats[hidden], .sheet-tab[hidden], .locate-fab[hidden], .switch-row[hidden] { display: none !important; }
+  .after-walk h3 { color: #1f7a35; }
+
+  /* Touch screens pinch to zoom, as in Apple Maps; the +/- buttons are for mice. */
+  @media (pointer: coarse) { .leaflet-control-zoom { display: none; } }
+  .leaflet-container { touch-action: none; overscroll-behavior: contain; }
+  html, body { overscroll-behavior-y: none; }
+
   /* Someone who has asked their OS for less motion gets none of it. */
   @media (prefers-reduced-motion: reduce) {
     *, *::after { animation: none !important; transition: none !important; }
@@ -684,6 +779,15 @@
             <option value="full">Full</option><option value="limited">Limited</option><option value="unable">Unable</option>
           </select></div>
         </div>
+        <h3 class="section-divider">Safety</h3>
+        <label class="switch-row" for="takes_glucose_lowering_medication">
+          <span>I take insulin or a sulfonylurea<small>For example glipizide, glimepiride or glyburide. These can make blood sugar drop during exercise.</small></span>
+          <input id="takes_glucose_lowering_medication" type="checkbox" class="switch" />
+        </label>
+        <div class="pair">
+          <div><label for="emergency_contact_name">Emergency contact</label><input id="emergency_contact_name" type="text" maxlength="80" autocomplete="off" placeholder="Name" /></div>
+          <div><label for="emergency_contact_phone">Their phone</label><input id="emergency_contact_phone" type="tel" inputmode="tel" maxlength="20" placeholder="(205) 555-0142" /></div>
+        </div>
         <button id="btn-profile">Save profile</button>
       </div>
       </details>
@@ -744,6 +848,42 @@
         <b id="journey-alert-title"></b><span id="journey-alert-text"></span>
       </div>
       <button id="mini-stats" class="mini-stats" hidden aria-label="Show walk details"></button>
+      <button id="btn-unwell" class="unwell-fab" hidden>Not feeling well?</button>
+      <button id="btn-map-locate" class="locate-fab" aria-label="Show my location">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 3.8 10.6c-.8.3-.7 1.5.1 1.7l6.8 1.6 1.6 6.8c.2.8 1.4.9 1.7.1L21 4.1c.2-.4-.1-.8-.5-.6Z" fill="currentColor"/></svg>
+      </button>
+      <div id="help-sheet" class="help-sheet" role="dialog" aria-labelledby="help-title" hidden>
+        <h3 id="help-title">Stop and sit down</h3>
+        <p>If you feel shaky, sweaty, dizzy or confused, your blood sugar may be low.</p>
+        <ol>
+          <li>Take 15 g of fast sugar: half a glass of juice or 3–4 glucose tablets.</li>
+          <li>Rest for 15 minutes, then check your blood sugar if you can.</li>
+          <li>Don't keep walking until you feel better.</li>
+        </ol>
+        <p class="help-urgent">Chest pain, trouble breathing or fainting: call 911 now.</p>
+        <div class="help-actions">
+          <a id="help-call-contact" class="help-btn" hidden>Call contact</a>
+          <a id="help-call-911" class="help-btn danger-btn" href="tel:911">Call 911</a>
+          <button id="help-go-home" class="help-btn">Directions home</button>
+          <button id="help-better" class="help-btn quiet-btn">I feel better, continue</button>
+          <button id="help-end" class="help-btn quiet-btn">End my walk</button>
+        </div>
+      </div>
+      <div id="finish-sheet" class="help-sheet finish-sheet" role="dialog" aria-labelledby="finish-title" hidden>
+        <h3 id="finish-title">How did that feel?</h3>
+        <div class="segmented segmented-3" id="effort-group" role="group" aria-label="How it felt">
+          <button type="button" data-effort="easy" aria-pressed="false">Easy</button>
+          <button type="button" data-effort="just_right" aria-pressed="true">Just right</button>
+          <button type="button" data-effort="hard" aria-pressed="false">Hard</button>
+        </div>
+        <label for="post-glucose">Blood sugar now <span style="font-weight:400">(optional)</span></label>
+        <div class="glucose-row">
+          <input id="post-glucose" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 110" />
+          <select id="post-glucose-unit" aria-label="Blood sugar unit"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select>
+        </div>
+        <button id="btn-save-walk">Save my walk</button>
+        <button id="btn-skip-checkin" class="quiet">Skip</button>
+      </div>
       <button id="btn-sheet-show" class="sheet-tab" hidden aria-label="Show walk details">&lsaquo;</button>
       <div class="location-controls">
       <div class="location-actions">
@@ -803,6 +943,7 @@
         <h2>Your progress</h2>
         <p>Your completed activities, time outside, and small wins along the way.</p>
       </div>
+      <div id="after-walk-out" class="card after-walk" hidden></div>
       <div id="progress-out" class="stats"></div>
       <div id="simulation-progress" class="card" hidden></div>
       <button id="btn-progress" class="quiet" style="margin-top:12px">Refresh</button>
@@ -826,6 +967,7 @@
 let accessToken = null;
 let signedInUserId = null;
 let recommendation = null;
+let savedProfile = null;
 let startPoint = null;
 // Where this person lives, if they saved it: routes start and end there.
 let homePoint = null;
@@ -915,7 +1057,12 @@ function initMap() {
   }
   // Only the view before we know where the person is; home or their current
   // location replaces it straight away.
-  map = L.map("map", { zoomControl: false }).setView([33.5186, -86.8104], 12); // Birmingham, AL
+  // Fractional zoom and softer inertia make pinching and flicking feel like
+  // a native map rather than stepping between fixed zoom levels.
+  map = L.map("map", {
+    zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90,
+    inertiaDeceleration: 2200, easeLinearity: 0.2, bounceAtZoomLimits: false, tapTolerance: 20,
+  }).setView([33.5186, -86.8104], 12); // Birmingham, AL
   L.control.zoom({ position: "bottomright" }).addTo(map);
   // OpenStreetMap's own map: real streets, paths, parks and building
   // outlines, no API key. Its tile policy allows light use like this pilot
@@ -1070,6 +1217,9 @@ function profilePayload() {
     mobility_limitations: el("mobility_limitations").value,
     walking_ability: el("walking_ability").value,
     cycling_ability: el("cycling_ability").value,
+    takes_glucose_lowering_medication: Boolean(el("takes_glucose_lowering_medication").checked),
+    emergency_contact_name: el("emergency_contact_name").value.trim() || null,
+    emergency_contact_phone: el("emergency_contact_phone").value.trim() || null,
   };
 }
 
@@ -1101,8 +1251,11 @@ async function authenticate(path) {
     accessToken = data.access_token;
     try {
       const profile = await api("/profile");
+      savedProfile = profile;
       for (const field of Object.keys(profilePayload())) {
-        if (profile[field] !== undefined) el(field).value = String(profile[field]);
+        if (profile[field] === undefined) continue;
+        if (typeof profile[field] === "boolean") el(field).checked = profile[field];
+        else el(field).value = profile[field] === null ? "" : String(profile[field]);
       }
       el("profile-editor").open = false;
     } catch (error) {
@@ -1133,7 +1286,7 @@ el("btn-password").onclick = () => {
 el("btn-profile").onclick = busy(el("btn-profile"), async () => {
   if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity before changing your profile.", true); return; }
   try {
-    await api("/profile", { method: "PUT", body: profilePayload() });
+    savedProfile = await api("/profile", { method: "PUT", body: profilePayload() });
     recommendation = null;
     invalidateOptions();
     el("btn-options").disabled = true;
@@ -1489,7 +1642,14 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
         "available from this route source, so they are estimated rather than surveyed.</p>"
       : "";
 
-    el("options-out").innerHTML = banner + withheld + unverified + data.options.map((option, index) =>
+    const weatherCard = data.weather
+      ? '<div class="weather-card ' + esc(data.weather.level) + '"><b>' + Math.round(data.weather.temperature_f) + "°F" +
+        (Math.round(data.weather.heat_index_f) > Math.round(data.weather.temperature_f) + 1 ? ", feels like " + Math.round(data.weather.heat_index_f) + "°F" : "") +
+        "</b><span>" + esc(data.weather.advice) + "</span></div>"
+      : "";
+    offeredContext.weather = data.weather || null;
+
+    el("options-out").innerHTML = weatherCard + banner + withheld + unverified + data.options.map((option, index) =>
       '<div class="option" style="border-left-color:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '">' +
       '<div class="top"><span class="name"><span class="rank-dot" style="background:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '"></span>' + esc(routeName(option.label)) + "</span>" +
       '<span class="score">' + Math.round(option.score) + "<small>match</small></span></div>" +
@@ -1551,6 +1711,7 @@ async function selectRoute(label, simulate = false) {
       },
     });
     session.label = label;
+    session.weather = context.weather || null;
     session.turnPoint = turnPointOf(session.route_geometry);
     el("session-card").hidden = false;
     resetJourney();
@@ -1594,7 +1755,7 @@ function renderSession() {
   if (session.simulated) el("track-note").textContent = "Demo only: follows the selected route automatically. It does not use GPS or count as real exercise.";
 }
 
-async function updateSession(status) {
+async function updateSession(status, checkin) {
   if (!session || session.status !== "selected") return;
   try {
     if (session.simulated) {
@@ -1602,7 +1763,15 @@ async function updateSession(status) {
       if (status === "completed") simulatedSessions.push({...session});
       renderSimulationProgress();
     } else {
-      session = await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status } });
+      const keep = { label: session.label, weather: session.weather };
+      session = { ...(await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status, ...(checkin || {}) } })), ...keep };
+    }
+    el("finish-sheet").hidden = true;
+    el("help-sheet").hidden = true;
+    el("btn-unwell").hidden = true;
+    el("after-walk-out").hidden = !session.after_walk_advice;
+    if (session.after_walk_advice) {
+      el("after-walk-out").innerHTML = "<h3>Walk saved</h3><p>" + esc(session.after_walk_advice) + "</p>";
     }
     stopTracking();
     renderSession();
@@ -1617,7 +1786,20 @@ async function updateSession(status) {
   } catch (error) { toast(error.message, true); }
 }
 
-el("btn-complete").onclick = busy(el("btn-complete"), () => updateSession("completed"));
+el("btn-complete").onclick = busy(el("btn-complete"), async () => {
+  if (session && !session.simulated && session.status === "selected") {
+    stopTracking();
+    el("finish-sheet").hidden = false;
+    return;
+  }
+  await updateSession("completed");
+});
+el("btn-save-walk").onclick = busy(el("btn-save-walk"), async () => {
+  await updateSession("completed", finishCheckinPayload());
+});
+el("btn-skip-checkin").onclick = busy(el("btn-skip-checkin"), async () => {
+  await updateSession("completed");
+});
 el("btn-abandon").onclick = busy(el("btn-abandon"), () => updateSession("abandoned"));
 
 // --- Live tracking ---------------------------------------------------------
@@ -1783,8 +1965,58 @@ function announceStart() {
   unlockSound();
   session.turnAnnounced = false;
   el("back-home").hidden = true;
-  journeyAlert("start", "Your " + activityWord() + " has started",
-    "Follow the green line. We'll tell you when to turn back.");
+  el("btn-unwell").hidden = false;
+  const hot = session.weather && ["extreme_caution", "danger"].includes(session.weather.level);
+  journeyAlert(hot ? "turn" : "start", "Your " + activityWord() + " has started",
+    hot ? "It's hot today. Sip water, go slowly, and stop if you feel dizzy."
+        : "Follow the green line. We'll tell you when to turn back.");
+}
+
+// --- "Not feeling well?" -------------------------------------------------------
+// One tap from anywhere on the walk: stop, see what to do for a low, call
+// someone, or get directions home.
+function openHelp() {
+  const wasMoving = watchId !== null || simulationTimer !== null;
+  stopTracking();
+  session.pausedForHelp = wasMoving;
+  el("journey-alert").hidden = true;
+  const contact = savedProfile && savedProfile.emergency_contact_phone;
+  el("help-call-contact").hidden = !contact;
+  if (contact) {
+    el("help-call-contact").textContent = "Call " + (savedProfile.emergency_contact_name || "my contact");
+    el("help-call-contact").setAttribute("href", "tel:" + contact.replace(/[^+0-9]/g, ""));
+  }
+  el("help-sheet").hidden = false;
+  playTones([[520, 0.25]]);
+}
+el("btn-unwell").onclick = () => openHelp();
+el("help-go-home").onclick = () => { if (session && session.route_geometry) window.open(directionsHomeUrl(), "_blank", "noopener"); };
+el("help-better").onclick = () => {
+  el("help-sheet").hidden = true;
+  if (session && session.pausedForHelp) {
+    if (session.simulated) startSimulation(); else startTracking();
+  }
+};
+el("help-end").onclick = busy(el("help-end"), async () => {
+  el("help-sheet").hidden = true;
+  await updateSession("abandoned");
+});
+
+// --- After-walk check-in ----------------------------------------------------------
+let effortChoice = "just_right";
+document.querySelectorAll("[data-effort]").forEach((button) => {
+  button.onclick = () => {
+    effortChoice = button.dataset.effort;
+    document.querySelectorAll("[data-effort]").forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+  };
+});
+
+function finishCheckinPayload() {
+  const reading = el("post-glucose").value.trim();
+  const value = Number(reading);
+  const body = { effort: effortChoice, post_glucose_unit: el("post-glucose-unit").value || "mg/dL" };
+  if (reading && Number.isFinite(value) && value > 0) body.post_glucose_value = value;
+  return body;
 }
 
 function checkTurnaround(point) {
@@ -1816,12 +2048,31 @@ function setSheetHidden(hidden) {
   if (map && lastFix && followMode) setTimeout(() => followPoint(lastFix, 0.3), 380);
 }
 el("btn-sheet-hide").onclick = () => setSheetHidden(true);
+el("btn-map-locate").onclick = () => el("btn-locate").onclick();
+
+// Swipe the details panel sideways to put it away, as with iOS cards.
+function onSwipe(node, direction, action) {
+  if (!node || !node.addEventListener) return;
+  let startX = null, startY = null;
+  node.addEventListener("touchstart", (event) => { startX = event.touches[0].clientX; startY = event.touches[0].clientY; }, { passive: true });
+  node.addEventListener("touchend", (event) => {
+    if (startX === null) return;
+    const dx = event.changedTouches[0].clientX - startX, dy = event.changedTouches[0].clientY - startY;
+    startX = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && Math.sign(dx) === direction) action();
+  }, { passive: true });
+}
+onSwipe(el("session-card"), 1, () => { if (el("screen-route").classList.contains("is-journey")) setSheetHidden(true); });
+onSwipe(el("mini-stats"), -1, () => setSheetHidden(false));
 el("btn-sheet-show").onclick = () => setSheetHidden(false);
 el("mini-stats").onclick = () => setSheetHidden(false);
 
 function resetJourney() {
   stopTracking();
   setSheetHidden(false);
+  el("help-sheet").hidden = true;
+  el("finish-sheet").hidden = true;
+  el("btn-unwell").hidden = true;
   el("journey-alert").hidden = true;
   el("back-home").hidden = true;
   el("screen-route").classList.remove("is-journey");

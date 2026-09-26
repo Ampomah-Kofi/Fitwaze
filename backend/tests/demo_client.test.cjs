@@ -274,3 +274,62 @@ test('sound can be switched off', () => {
   assert.equal(app.run('soundOn'), false);
   assert.match(app.nodes.get('btn-sound').textContent, /off/);
 });
+
+test('"Not feeling well?" stops the walk and offers to call the emergency contact', () => {
+  const app = setup();
+  app.nodes.get('help-sheet').hidden = true;
+  app.run(`session = {status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8], [33.51, -86.8], [33.5, -86.8]]};
+    savedProfile = {emergency_contact_name: 'Ama', emergency_contact_phone: '(205) 555-0142'};
+    window.isSecureContext = true;
+    navigator.geolocation = {watchPosition() {return 7;}, clearWatch() {globalThis.cleared = true;}};
+    startTracking();`);
+  app.nodes.get('btn-unwell').onclick();
+  assert.equal(app.nodes.get('help-sheet').hidden, false);
+  assert.equal(app.run('watchId'), null, 'tracking stopped');
+  assert.equal(app.nodes.get('help-call-contact').hidden, false);
+  assert.equal(app.nodes.get('help-call-contact').getAttribute('href'), 'tel:2055550142');
+  assert.match(app.nodes.get('help-call-contact').textContent, /Ama/);
+  app.nodes.get('help-better').onclick();
+  assert.equal(app.nodes.get('help-sheet').hidden, true);
+  assert.equal(app.run('watchId'), 7, 'tracking resumed');
+});
+
+test('finishing a real walk asks how it felt and sends the check-in', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    requests.push({url, body: JSON.parse(options.body)});
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: [],
+      after_walk_advice: 'Your blood sugar is in a good range after your activity.'});
+  });
+  app.nodes.get('finish-sheet').hidden = true;
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};`);
+  await app.nodes.get('btn-complete').onclick();
+  assert.equal(app.nodes.get('finish-sheet').hidden, false);
+  assert.equal(requests.length, 0, 'nothing saved until the check-in is answered');
+  app.run(`effortChoice = 'hard';`);
+  app.nodes.get('post-glucose').value = '118';
+  app.nodes.get('post-glucose-unit').value = 'mg/dL';
+  await app.nodes.get('btn-save-walk').onclick();
+  assert.deepEqual({...requests[0].body}, {status: 'completed', effort: 'hard', post_glucose_unit: 'mg/dL', post_glucose_value: 118});
+  assert.equal(app.nodes.get('after-walk-out').hidden, false);
+  assert.match(app.nodes.get('after-walk-out').innerHTML, /good range/);
+});
+
+test('route options show the heat check', async () => {
+  const app = setup(async () => response({options: [], provider: 'mock', excluded: [],
+    weather: {temperature_f: 96, heat_index_f: 108, level: 'danger', advice: "It's dangerously hot right now."}}));
+  app.run(seed);
+  await app.nodes.get('btn-options').onclick();
+  assert.match(app.nodes.get('options-out').innerHTML, /weather-card danger/);
+  assert.match(app.nodes.get('options-out').innerHTML, /feels like 108/);
+});
+
+test('safety answers are part of the saved profile', () => {
+  const app = setup();
+  app.nodes.get('takes_glucose_lowering_medication').checked = true;
+  app.nodes.get('emergency_contact_phone').value = ' (205) 555-0142 ';
+  const payload = app.run('profilePayload()');
+  assert.equal(payload.takes_glucose_lowering_medication, true);
+  assert.equal(payload.emergency_contact_phone, '(205) 555-0142');
+  assert.equal(payload.emergency_contact_name, null);
+});
