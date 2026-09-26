@@ -85,7 +85,7 @@
 
   .option { background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--muted); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
   .option .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-  .option .name { font-weight: 600; text-transform: capitalize; }
+  .option .name { font-weight: 600; }
   .option .score { font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 700; }
   .option .why { font-size: 13px; color: var(--muted); margin: 6px 0 10px; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -317,6 +317,36 @@
     .side-by-side { grid-template-columns: 1fr; }
   }
 
+  /* --- Morning check-in ------------------------------------------------- */
+  .segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 18px; }
+  .segmented button {
+    margin: 0; min-height: 48px; padding: 8px 4px; font-size: 14px;
+    background: #fcfdfb; color: var(--ink); border: 1px solid var(--line);
+  }
+  .segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .segmented button[data-feeling="unwell"][aria-pressed="true"] { background: var(--bad); border-color: var(--bad); }
+  .glucose-row { display: grid; grid-template-columns: minmax(0, 1fr) 118px; gap: 8px; }
+  .check {
+    display: flex; gap: 12px; align-items: flex-start; font-weight: 500; font-size: 14px;
+    color: var(--ink); background: #fcfdfb; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; margin-bottom: 8px; cursor: pointer; line-height: 1.4;
+  }
+  .check input { width: 22px; height: 22px; min-height: 0; margin: 0; flex: none; accent-color: var(--accent); }
+  .check-hint { font-size: 12px; color: var(--muted); margin: -2px 0 16px; }
+  .plan { margin-top: 16px; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .plan-headline { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .plan-headline b { font-size: 30px; letter-spacing: -.03em; color: var(--accent); }
+  .plan-headline span { font-size: 17px; font-weight: 600; }
+  .plan p { font-size: 14px; color: var(--ink); }
+  .plan.hold { background: #fbeeee; border-color: #efc9c9; }
+  .plan.hold h3 { color: var(--bad); }
+  .option .score small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); text-align: right; letter-spacing: 0; }
+  .chip.good { background: #e8f5ee; color: var(--good); border-color: #cde7d8; }
+  .chip.warn { background: #fdf3e7; color: var(--warn); border-color: #f1dcc0; }
+  /* Messages appear under the app bar, where they never cover the button
+     the person just pressed or the result it produced. */
+  #status { top: calc(78px + env(safe-area-inset-top)); bottom: auto !important; }
+
   /* Someone who has asked their OS for less motion gets none of it. */
   @media (prefers-reduced-motion: reduce) {
     *, *::after { animation: none !important; transition: none !important; }
@@ -433,17 +463,34 @@
       </div>
       </details>
       <aside class="activity-panel">
-      <div class="step-label">02 / Your next step</div>
+      <div class="step-label">02 / Morning check-in</div>
       <div class="card">
-        <h3>Today's activity</h3>
-        <p>Save your profile, then find an activity and duration matched to you.</p>
+        <h3>How are you this morning?</h3>
+        <p>A quick check-in shapes today's activity around how you are right now.</p>
+        <label id="feeling-label">I feel</label>
+        <div class="segmented" id="feeling-group" role="group" aria-labelledby="feeling-label">
+          <button type="button" data-feeling="good" aria-pressed="true">Good</button>
+          <button type="button" data-feeling="okay" aria-pressed="false">Okay</button>
+          <button type="button" data-feeling="tired" aria-pressed="false">Tired</button>
+          <button type="button" data-feeling="unwell" aria-pressed="false">Unwell</button>
+        </div>
+        <label for="glucose">Blood sugar reading <span style="font-weight:400">(optional)</span></label>
+        <div class="glucose-row">
+          <input id="glucose" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 6.4" />
+          <select id="glucose-unit" aria-label="Blood sugar unit">
+            <option value="mmol/L">mmol/L</option><option value="mg/dL">mg/dL</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox" id="foot-problem" /> A new sore, blister, cut or swelling on my feet</label>
+        <label class="check"><input type="checkbox" id="warning-symptoms" /> Chest pain, unusual breathlessness, dizziness or fainting</label>
+        <p class="check-hint">Tick only what applies today.</p>
         <label for="activity-choice">For this session</label>
         <select id="activity-choice">
           <option value="">Recommend an activity for me</option>
           <option value="walk">Walking</option>
           <option value="cycle">Cycling</option>
         </select>
-        <button id="btn-recommend">Get my recommendation</button>
+        <button id="btn-recommend">Get today's plan</button>
         <div id="recommendation-out"></div>
       </div>
       <p class="note">Start where you are. You can update your profile as your routine changes.</p>
@@ -724,8 +771,11 @@ async function api(path, options) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    const detail = data && data.detail ? JSON.stringify(data.detail) : response.statusText;
-    const error = new Error(response.status + ": " + detail);
+    // Show people the server's own sentence, not a status code and JSON.
+    let detail = data && data.detail ? data.detail : response.statusText;
+    if (Array.isArray(detail)) detail = (detail[0] && detail[0].msg || "Check your entries.").replace(/^Value error, /, "");
+    else if (typeof detail !== "string") detail = JSON.stringify(detail);
+    const error = new Error(detail);
     error.status = response.status;
     throw error;
   }
@@ -819,28 +869,71 @@ el("btn-profile").onclick = busy(el("btn-profile"), async () => {
   } catch (error) { toast(error.message, true); }
 });
 
+// --- Morning check-in -------------------------------------------------------
+let todayFeeling = "good";
+document.querySelectorAll("[data-feeling]").forEach((button) => {
+  button.onclick = () => {
+    todayFeeling = button.dataset.feeling;
+    document.querySelectorAll("[data-feeling]").forEach((other) =>
+      other.setAttribute("aria-pressed", String(other === button)));
+  };
+});
+
+function checkinPayload() {
+  const reading = el("glucose").value.trim();
+  const value = Number(reading);
+  return {
+    feeling: todayFeeling,
+    glucose_value: reading && Number.isFinite(value) && value > 0 ? value : null,
+    glucose_unit: el("glucose-unit").value || "mmol/L",
+    foot_problem: Boolean(el("foot-problem").checked),
+    warning_symptoms: Boolean(el("warning-symptoms").checked),
+  };
+}
+
+const ACTIVITY_NAMES = {walk: "Walk", cycle: "Cycle"};
+
+function revealPlan() {
+  const out = el("recommendation-out");
+  if (out.scrollIntoView) out.scrollIntoView({behavior: "smooth", block: "start"});
+}
+
 el("btn-recommend").onclick = busy(el("btn-recommend"), async () => {
   if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity before starting another.", true); return; }
   try {
     recommendation = await api("/activity/recommendation", {
-      method: "POST", body: {activity_type: el("activity-choice").value || null},
+      method: "POST", body: {activity_type: el("activity-choice").value || null, checkin: checkinPayload()},
     });
     invalidateOptions();
-    el("route-context").textContent = recommendation.activity_type + " · " + recommendation.duration_minutes + " minutes · round trip";
+    el("route-context").textContent = (ACTIVITY_NAMES[recommendation.activity_type] || recommendation.activity_type) +
+      " · " + recommendation.duration_minutes + " minutes · round trip from where you are";
     el("recommendation-out").innerHTML =
-      '<h3 style="margin-top:12px">' + esc(recommendation.activity_type) + " &middot; " +
-      esc(recommendation.duration_minutes) + " minutes</h3>" +
+      '<div class="plan"><span class="eyebrow">Today\'s plan</span>' +
+      '<div class="plan-headline"><b>' + esc(recommendation.duration_minutes) + " min</b><span>" +
+      esc(ACTIVITY_NAMES[recommendation.activity_type] || recommendation.activity_type) + "</span></div>" +
       "<p>" + esc(recommendation.rationale) + "</p>" +
-      '<button id="btn-goroute" class="ghost">Find a route for this</button>' +
-      '<p class="disclaimer">' + esc(recommendation.disclaimer) + "</p>";
+      '<button id="btn-goroute">Find a route near me</button>' +
+      '<p class="disclaimer">' + esc(recommendation.disclaimer) + "</p></div>";
     el("btn-goroute").onclick = () => {
       showRoutePanel("map");
       showScreen("route");
       if (!startPoint) el("start-state").textContent = "Choose a starting point: tap the map, use your location, or enter coordinates. Then tap Find my routes.";
     };
     el("btn-options").disabled = !startPoint;
-    toast("Recommendation ready.");
-  } catch (error) { toast(error.message, true); }
+    revealPlan();
+  } catch (error) {
+    if (error.status === 409) {
+      // A hold is an answer, not a failure: keep it on screen with what to do.
+      recommendation = null;
+      invalidateOptions();
+      el("recommendation-out").innerHTML =
+        '<div class="plan hold"><h3>Not today</h3><p>' + esc(error.message) + "</p>" +
+        '<p class="disclaimer">This is general wellness guidance, not medical advice.</p></div>';
+      revealPlan();
+    } else {
+      toast(error.message, true);
+    }
+  }
 });
 
 function setStartPoint(lat, lon, accuracyMetres, label) {
@@ -925,6 +1018,42 @@ el("btn-locate").onclick = () => {
 let optionLines = [];
 let focusedOptionIndex = 0;
 
+const ROUTE_NAMES = {out_and_back: "There and back", small_loop: "Short loop", large_loop: "Longer loop"};
+function routeName(label) { return ROUTE_NAMES[label] || String(label).replace(/_/g, " "); }
+
+// What someone deciding where to walk wants to know at a glance: how far,
+// how long, how hilly, whether there are steps, how busy and how green.
+// Only measured facts become chips; unverified ones say so or stay silent.
+function routeChips(option) {
+  const unverified = option.unverified || [];
+  const factors = option.score_breakdown || {};
+  const environment = option.environment || {};
+  const chips = [
+    ["", (option.distance_m / 1000).toFixed(2) + " km"],
+    ["", Math.round(option.estimated_minutes) + " min"],
+  ];
+  if (!unverified.includes("slope") && factors.slope_inv !== undefined) {
+    chips.push(factors.slope_inv >= 0.75 ? ["good", "Flat"] :
+      factors.slope_inv >= 0.45 ? ["", "Gentle hills"] : ["warn", "Hilly"]);
+  }
+  if (typeof environment.ascent_m === "number") chips.push(["", Math.round(environment.ascent_m) + " m climb"]);
+  chips.push(unverified.includes("stairs") ? ["", "Steps unverified"] :
+    factors.step_free === 1 ? ["good", "Step-free"] : ["warn", "Includes steps"]);
+  const traffic = factors.traffic_exposure_inv !== undefined ? "traffic_exposure" : "traffic_stress";
+  const quiet = factors[traffic + "_inv"];
+  if (!unverified.includes(traffic) && quiet !== undefined) {
+    if (quiet >= 0.7) chips.push(["good", "Quiet streets"]);
+    else if (quiet < 0.4) chips.push(["warn", "Busy roads"]);
+  }
+  if (typeof environment.green_pct === "number") {
+    chips.push([environment.green_pct >= 50 ? "good" : "", Math.round(environment.green_pct) + "% green"]);
+  } else if (!unverified.includes("trail_bonus") && factors.trail_bonus >= 0.5) {
+    chips.push(["good", "Paths & parks"]);
+  }
+  if (!unverified.includes("bike_lane_score") && factors.bike_lane_score >= 0.5) chips.push(["good", "Bike lanes"]);
+  return chips.map(([tone, text]) => '<span class="chip ' + tone + '">' + esc(text) + "</span>").join("");
+}
+
 function drawOptions(options) {
   if (!map) return;
   optionLines = [];
@@ -936,7 +1065,7 @@ function drawOptions(options) {
       weight: index === 0 ? 6 : 4,
       opacity: index === 0 ? 0.95 : 0.6,
     }).addTo(routeLayer);
-    line.bindTooltip(option.label.replace(/_/g, " ") + " · score " + option.score);
+    line.bindTooltip(routeName(option.label) + " · " + Math.round(option.score) + " match");
     // Tapping the line is the same gesture as tapping its card.
     line.on("click", () => focusOption(index));
     optionLines.push(line);
@@ -984,16 +1113,17 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
 
     const isReal = data.provider === "ors";
     const banner = isReal
-      ? '<div class="banner real">Real walkable and cyclable routes from OpenStreetMap data.</div>'
-      : '<div class="banner mock">Synthetic demo routes (ROUTE_PROVIDER=mock) — shaped like ' +
-        "real ones, but not following actual streets.</div>";
+      ? '<div class="banner real">Real walking and cycling routes from OpenStreetMap, checked for ' +
+        "hills, steps, traffic and greenery around you.</div>"
+      : '<div class="banner mock">Practice routes: sample loops for this demo that do not follow ' +
+        "real streets. Add an OpenRouteService key on the server for real routes.</div>";
 
     // Routes the engine withheld as unsuitable, with the reason. Saying this
     // out loud is the point: a silent filter looks like a bug or a short list.
     const withheld = (data.excluded || []).length
       ? '<div class="banner mock">' +
         data.excluded.map((item) =>
-          "<b>" + esc(item.label.replace(/_/g, " ")) + "</b> is not shown: it " + esc(item.reason) + "."
+          "<b>" + esc(routeName(item.label)) + "</b> is not shown: it " + esc(item.reason) + "."
         ).join("<br />") +
         "</div>"
       : "";
@@ -1005,12 +1135,9 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
 
     el("options-out").innerHTML = banner + withheld + unverified + data.options.map((option, index) =>
       '<div class="option" style="border-left-color:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '">' +
-      '<div class="top"><span class="name">' + esc(option.label.replace(/_/g, " ")) + "</span>" +
-      '<span class="score">' + esc(option.score) + "</span></div>" +
-      '<div class="chips"><span class="chip">' + (option.distance_m / 1000).toFixed(2) + " km</span>" +
-      '<span class="chip">' + Math.round(option.estimated_minutes) + " min</span>" +
-      '<span class="chip">' + ((option.unverified || []).includes("stairs") ? "Steps unverified" :
-        option.score_breakdown.step_free === 1 ? "No steps reported" : "Includes steps") + "</span></div>" +
+      '<div class="top"><span class="name">' + esc(routeName(option.label)) + "</span>" +
+      '<span class="score">' + Math.round(option.score) + "<small>match</small></span></div>" +
+      '<div class="chips">' + routeChips(option) + "</div>" +
       '<p class="why">' + esc(option.explanation) + "</p>" +
       '<button data-select="' + esc(option.label) + '">Choose this route</button>' +
       '<button class="quiet" data-simulate="' + esc(option.label) + '">Try a simulated journey</button></div>'

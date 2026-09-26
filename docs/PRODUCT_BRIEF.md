@@ -15,15 +15,20 @@ cardiometabolic conditions. The application does not diagnose or treat condition
 ## Initial demo acceptance flow
 
 1. Enter and save a profile.
-2. Receive an activity recommendation with a duration and explanation.
-3. Accept the suggested activity or choose walking/cycling for the session.
+2. Each morning, check in: how you feel, an optional blood glucose reading
+   (mmol/L or mg/dL), and any foot problem or warning symptoms. Low or very
+   high glucose, feeling unwell or warning symptoms produce a "Not today"
+   answer with what to do instead; a foot problem moves the session to
+   cycling; high glucose or tiredness shortens it.
+3. Receive today's activity recommendation with a duration and explanation.
+4. Accept the suggested activity or choose walking/cycling for the session.
    A new recommendation remains subject to the saved activity abilities.
-4. Use current location, tap the map, or enter latitude and longitude.
-5. Request several candidate round trips approximately matching the duration.
-6. Compare explanations, duration, distance and uncertainty; unsuitable known
+5. Use current location, tap the map, or enter latitude and longitude.
+6. Request several candidate round trips approximately matching the duration.
+7. Compare explanations, duration, distance and uncertainty; unsuitable known
    terrain can withhold a route, so fewer candidates may be returned.
-7. Select a route, start the journey, and follow the live GPS marker on the map.
-8. Finish or abandon the activity and review progress. Alternatively, choose
+8. Select a route, start the journey, and follow the live GPS marker on the map.
+9. Finish or abandon the activity and review progress. Alternatively, choose
    a simulated journey, follow its animated marker and finish into demo progress.
 
 The same mobile interface serves `/`, `/demo` and `/mobile`. On larger screens
@@ -45,9 +50,12 @@ routes are rejected, and the client sends the candidate revision to detect a
 changed route at selection. Activity choice must not bypass reported inability.
 
 The mock provider is synthetic and does not follow streets. ORS provides street
-routing, but requires configuration and a live smoke test. Surface attributes
-are currently unknown for ORS: placeholder scores must not be presented as
-measured accessibility. Sidewalks, protected cycle facilities, traffic speed,
+routing, but requires configuration and a live smoke test. With ORS, each
+route's topography (steepest sustained gradient and total climb, from
+elevation) and surroundings (steps, busy roads, paths/footways, cycleways and,
+for walking, greenery) are measured from ORS elevation and extra_info layers
+and drive scoring and the feasibility gate. Sidewalk coverage, crossings and
+safety remain unmeasured placeholders and are labelled as such. Sidewalks, protected cycle facilities, traffic speed,
 crash data, parks and other GIS enrichment remain integration work. Not every
 factor in the proposed product brief has a measured data source today.
 
