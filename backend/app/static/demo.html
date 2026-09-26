@@ -1588,6 +1588,8 @@ let simulationElapsedSeconds = 0;
 let simulationTravelled = 0;
 
 function enterJourney() {
+  // Labels like "Your location" would sit over the full-screen map.
+  if (map && map.closePopup) map.closePopup();
   el("screen-route").classList.add("is-journey");
   showScreen("route");
   showRoutePanel("map");
