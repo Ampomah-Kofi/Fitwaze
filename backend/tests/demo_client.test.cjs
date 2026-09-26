@@ -333,3 +333,11 @@ test('safety answers are part of the saved profile', () => {
   assert.equal(payload.emergency_contact_phone, '(205) 555-0142');
   assert.equal(payload.emergency_contact_name, null);
 });
+
+test('a server crash shows a plain message, not a JSON parse error', async () => {
+  const app = setup(async () => ({ok: false, status: 500, text: async () => 'Internal Server Error'}));
+  app.run(`recommendation = null;`);
+  await app.nodes.get('btn-recommend').onclick();
+  assert.match(app.nodes.get('status').textContent, /server had a problem \(error 500\)/);
+  assert.doesNotMatch(app.nodes.get('status').textContent, /JSON|Unexpected token/);
+});

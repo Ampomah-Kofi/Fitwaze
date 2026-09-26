@@ -1189,7 +1189,17 @@ async function api(path, options) {
     body: settings.body ? JSON.stringify(settings.body) : undefined,
   });
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (parseError) {
+    // A crash or a proxy error page is not JSON: say what happened plainly.
+    const error = new Error(response.ok
+      ? "The server sent a reply the app could not read. Reload the page and try again."
+      : "The server had a problem (error " + response.status + "). Try again; if it keeps happening, check the app window on the laptop.");
+    error.status = response.status;
+    throw error;
+  }
   if (!response.ok) {
     // Show people the server's own sentence, not a status code and JSON.
     let detail = data && data.detail ? data.detail : response.statusText;
