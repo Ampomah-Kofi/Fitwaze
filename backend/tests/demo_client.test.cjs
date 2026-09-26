@@ -226,3 +226,51 @@ test('arriving back at the start after most of the route says so', () => {
   app.run(`travelledMetres = 900; checkBackHome([5.6038, -0.187]);`);
   assert.equal(app.nodes.get('back-home').hidden, false);
 });
+
+test('a walk announces its start, the turn-back point and the return', () => {
+  const app = setup();
+  app.nodes.get('journey-alert').hidden = true;
+  app.nodes.get('back-home').hidden = true;
+  app.run(`recommendation = {id: 'rec-1', activity_type: 'walk', duration_minutes: 12};
+    session = {status: 'selected', distance_m: 1000, label: 'out_and_back',
+      route_geometry: [[33.5186, -86.8104], [33.5231, -86.8104], [33.5186, -86.8104]]};
+    announceStart();`);
+  assert.equal(app.nodes.get('journey-alert').hidden, false);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /walk has started/);
+
+  app.run(`travelledMetres = 200; checkTurnaround([33.5200, -86.8104]);`);
+  assert.equal(app.run('session.turnAnnounced'), false, 'not before the turning point');
+  app.run(`travelledMetres = 480; checkTurnaround([33.5230, -86.8104]);`);
+  assert.equal(app.run('session.turnAnnounced'), true);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /Turn back now/);
+
+  app.run(`setSheetHidden(true); travelledMetres = 980; checkBackHome([33.5186, -86.8104]);`);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /back at your start/);
+  assert(!app.nodes.get('session-card').classList.contains('slid-away'), 'Finish is visible again');
+});
+
+test('a loop says to head back at halfway, even when GPS misses the exact spot', () => {
+  const app = setup();
+  app.run(`session = {status: 'selected', distance_m: 1000, label: 'small_loop',
+      route_geometry: [[33.5186, -86.8104], [33.5200, -86.8104], [33.5200, -86.8090], [33.5186, -86.8104]]};
+    travelledMetres = 600; checkTurnaround([33.53, -86.80]);`);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /head back/);
+});
+
+test('the details panel slides away and comes back', () => {
+  const app = setup();
+  app.run(`setSheetHidden(true);`);
+  assert(app.nodes.get('session-card').classList.contains('slid-away'));
+  assert.equal(app.nodes.get('btn-sheet-show').hidden, false);
+  assert.equal(app.nodes.get('mini-stats').hidden, false);
+  app.nodes.get('btn-sheet-show').onclick();
+  assert(!app.nodes.get('session-card').classList.contains('slid-away'));
+  assert.equal(app.nodes.get('mini-stats').hidden, true);
+});
+
+test('sound can be switched off', () => {
+  const app = setup();
+  app.nodes.get('btn-sound').onclick();
+  assert.equal(app.run('soundOn'), false);
+  assert.match(app.nodes.get('btn-sound').textContent, /off/);
+});

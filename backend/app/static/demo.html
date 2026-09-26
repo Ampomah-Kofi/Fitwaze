@@ -542,6 +542,36 @@
   .auth-card h3 { font-size: 28px; }
   .password-field button { background: transparent; color: var(--blue); min-height: 44px; font-size: 15px; }
 
+  /* --- Journey: sliding panel, turn-back alerts ------------------------- */
+  #session-card { transition: transform .35s cubic-bezier(.22, .61, .36, 1), opacity .25s ease; }
+  #screen-route.is-journey #session-card.slid-away { transform: translateX(calc(100% + 24px)); opacity: 0; pointer-events: none; }
+  .sheet-hide { flex: none; width: 40px; min-height: 40px; padding: 0; margin: 0; border-radius: 50%;
+    background: var(--fill); color: var(--ink); font-size: 24px; line-height: 1; }
+  .sheet-head h3 { flex: 1; }
+  .sheet-tab { position: absolute; right: 0; bottom: calc(110px + env(safe-area-inset-bottom)); z-index: 895;
+    width: 46px; min-height: 72px; padding: 0; margin: 0; border-radius: 18px 0 0 18px; font-size: 30px;
+    background: rgba(255, 255, 255, .94); color: var(--accent); box-shadow: 0 4px 16px #0e231a33;
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  .mini-stats { position: absolute; left: 12px; right: 58px; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 890;
+    width: auto; min-height: 52px; margin: 0; padding: 10px 16px; border-radius: 999px; display: flex; gap: 14px;
+    align-items: center; justify-content: space-between; background: rgba(255, 255, 255, .94); color: var(--ink);
+    font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; box-shadow: 0 4px 16px #0e231a33;
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  .mini-stats span { color: var(--muted); font-weight: 500; font-size: 13px; }
+  #screen-route:not(.is-journey) .sheet-tab, #screen-route:not(.is-journey) .mini-stats,
+  #screen-route:not(.is-journey) .journey-alert { display: none; }
+  .journey-alert { position: absolute; left: 12px; right: 12px; top: calc(64px + env(safe-area-inset-top)); z-index: 905;
+    display: grid; gap: 4px; padding: 16px 18px; border-radius: 18px; background: var(--accent); color: #fff;
+    box-shadow: 0 10px 30px #0e231a4d; animation: alert-in .35s cubic-bezier(.22, .61, .36, 1) both; }
+  .journey-alert[hidden] { display: none; }
+  .journey-alert b { font-size: 22px; letter-spacing: -.02em; }
+  .journey-alert span { font-size: 15px; line-height: 1.4; }
+  .journey-alert.turn { background: #ff9500; color: #1c1c1e; }
+  @keyframes alert-in { from { opacity: 0; transform: translateY(-12px) scale(.98); } to { opacity: 1; transform: none; } }
+  .sound-toggle { min-height: 40px; font-size: 14px; margin-top: 8px; }
+  .turn-flag { width: 34px; height: 34px; border-radius: 50%; background: #ff9500; border: 3px solid #fff;
+    box-shadow: 0 3px 10px #0004; display: grid; place-items: center; color: #1c1c1e; font-weight: 800; font-size: 16px; }
+
   /* Someone who has asked their OS for less motion gets none of it. */
   @media (prefers-reduced-motion: reduce) {
     *, *::after { animation: none !important; transition: none !important; }
@@ -710,6 +740,11 @@
       <div class="map-panel">
       <div id="map" aria-label="Route map"></div>
       <button id="btn-recentre" class="map-fab" hidden>Follow me</button>
+      <div id="journey-alert" class="journey-alert" role="alert" aria-live="assertive" hidden>
+        <b id="journey-alert-title"></b><span id="journey-alert-text"></span>
+      </div>
+      <button id="mini-stats" class="mini-stats" hidden aria-label="Show walk details"></button>
+      <button id="btn-sheet-show" class="sheet-tab" hidden aria-label="Show walk details">&lsaquo;</button>
       <div class="location-controls">
       <div class="location-actions">
         <button id="btn-home" class="ghost" hidden>From home</button>
@@ -735,7 +770,10 @@
       </div>
       <div id="session-card" class="card" hidden>
         <div class="sheet-grip" aria-hidden="true"></div>
-        <div class="sheet-head"><h3 id="session-title">Your route</h3><div id="session-out"></div></div>
+        <div class="sheet-head">
+          <h3 id="session-title">Your route</h3><div id="session-out"></div>
+          <button id="btn-sheet-hide" class="sheet-hide" aria-label="Slide details away to see the map">&rsaquo;</button>
+        </div>
         <div id="back-home" class="back-home" role="status" hidden>You're back where you started. Well done! Tap Finish.</div>
         <div id="track-out" class="stats" hidden></div>
         <div class="goal-bar" id="goal-bar" hidden><span id="goal-bar-fill"></span></div>
@@ -745,6 +783,7 @@
           <button id="btn-abandon" class="danger">End early</button>
         </div>
         <p class="note" id="track-note"></p>
+        <button id="btn-sound" class="quiet sound-toggle" aria-pressed="true">Sound and voice: on</button>
         <details class="session-tools">
         <summary>Use another maps app (optional)</summary>
         <div class="side-by-side" style="margin-top:10px">
@@ -1511,6 +1550,8 @@ async function selectRoute(label, simulate = false) {
         candidate_revision: option.candidate_revision,
       },
     });
+    session.label = label;
+    session.turnPoint = turnPointOf(session.route_geometry);
     el("session-card").hidden = false;
     resetJourney();
     invalidateOptions();
@@ -1523,6 +1564,12 @@ async function selectRoute(label, simulate = false) {
       routeLayer.clearLayers();
       L.polyline(session.route_geometry, { color: "#fff", weight: 12, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
       const chosen = L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 7, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+      if (session.turnPoint && L.divIcon) {
+        L.marker(session.turnPoint, {
+          icon: L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 17], html: '<div class="turn-flag">&#8634;</div>' }),
+          title: "Turn back here",
+        }).addTo(routeLayer).bindTooltip(session.label === "out_and_back" ? "Turn back here" : "Halfway: head back from here");
+      }
       if (chosen.getBounds) setTimeout(() => { map.invalidateSize(); map.fitBounds(chosen.getBounds().pad(0.2)); }, 50);
     }
     toast(simulate ? "Simulation selected. No real activity will be recorded." : "Route selected. Ready when you are.");
@@ -1560,6 +1607,8 @@ async function updateSession(status) {
     stopTracking();
     renderSession();
     el("back-home").hidden = true;
+    el("journey-alert").hidden = true;
+    setSheetHidden(false);
     el("screen-route").classList.remove("is-journey");
     showRoutePanel("map");
     toast("Session " + status + ".");
@@ -1601,7 +1650,7 @@ function enterJourney() {
 // Keep the moving dot in the part of the map the sheet does not cover, by
 // centring the map half a sheet-height below it.
 function followPoint(point, duration) {
-  const sheet = el("session-card").offsetHeight || 0;
+  const sheet = sheetHidden ? 0 : (el("session-card").offsetHeight || 0);
   if (map.project && map.unproject && sheet) {
     const zoom = map.getZoom();
     const target = map.unproject(map.project(point, zoom).add([0, sheet / 2]), zoom);
@@ -1619,14 +1668,161 @@ function checkBackHome(point) {
   const done = travelledMetres > session.distance_m * 0.6 && metresBetween(start, point) < 40;
   if (done && el("back-home").hidden) {
     el("back-home").hidden = false;
-    toast("You're back where you started. Well done!");
+    // Bring the details back so Finish is one tap away.
+    setSheetHidden(false);
+    journeyAlert("home", "You're back at your start", "Well done! Tap Finish to save your " + activityWord() + ".");
   }
 }
 
 const TRAIL_STYLE = { color: "#e8590c", weight: 6, opacity: 0.95, lineCap: "round", lineJoin: "round" };
 
+// --- Journey announcements ---------------------------------------------------
+// People walking are not looking at the screen, so the moments that matter
+// (start, turn back, arrived) are said three ways: a banner, a short tone
+// pattern, and a spoken sentence, plus a vibration where the phone allows it.
+// Browsers (Safari on iPhone included) only let a page make sound after a
+// tap, so the audio and voice are unlocked by the Start tap itself. Tones
+// and voice work on iPhone and Android; vibration only where the browser
+// offers it (Android: iPhones do not let web pages vibrate).
+let audioContext = null;
+let soundOn = true;
+let alertTimer = null;
+
+function unlockSound() {
+  // iPhone: Safari puts page sound on the ringer channel, which the silent
+  // switch mutes. Declaring it as playback (Safari 16.4+) makes the turn-back
+  // tones and voice play like any media, on iOS and Android alike.
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (error) {}
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass && !audioContext) audioContext = new AudioContextClass();
+    if (audioContext && audioContext.state === "suspended") audioContext.resume();
+  } catch (error) { audioContext = null; }
+}
+
+// Tones as [frequency Hz, seconds].
+const TONES = {
+  start: [[660, 0.15], [880, 0.22]],
+  turn: [[880, 0.2], [880, 0.2], [880, 0.2], [660, 0.35]],
+  home: [[660, 0.15], [880, 0.15], [1175, 0.4]],
+};
+const BUZZ = { start: [120], turn: [250, 120, 250, 120, 400], home: [200, 100, 200, 100, 600] };
+
+function playTones(pattern) {
+  if (!soundOn || !audioContext) return;
+  try {
+    let at = audioContext.currentTime + 0.02;
+    for (const [frequency, seconds] of pattern) {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.5, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(at);
+      oscillator.stop(at + seconds + 0.03);
+      at += seconds + 0.09;
+    }
+  } catch (error) { /* sound is a bonus; the banner still shows */ }
+}
+
+function speak(text) {
+  if (!soundOn) return;
+  try {
+    if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  } catch (error) { /* no voice available */ }
+}
+
+function journeyAlert(kind, title, text) {
+  el("journey-alert-title").textContent = title;
+  el("journey-alert-text").textContent = text;
+  el("journey-alert").className = "journey-alert " + kind;
+  el("journey-alert").hidden = false;
+  playTones(TONES[kind] || TONES.start);
+  try { if (soundOn && navigator.vibrate) navigator.vibrate(BUZZ[kind] || BUZZ.start); } catch (error) {}
+  speak(title + ". " + text);
+  clearTimeout(alertTimer);
+  alertTimer = setTimeout(() => { el("journey-alert").hidden = true; }, kind === "start" ? 5000 : 9000);
+}
+
+el("btn-sound").onclick = () => {
+  soundOn = !soundOn;
+  if (soundOn) unlockSound();
+  el("btn-sound").textContent = "Sound and voice: " + (soundOn ? "on" : "off");
+  el("btn-sound").setAttribute("aria-pressed", String(soundOn));
+};
+
+// --- The turn-back point --------------------------------------------------------
+// Halfway along the route by distance. On a there-and-back route that is the
+// far end, where the person must turn round; on a loop it is where they are
+// now heading home.
+function turnPointOf(geometry) {
+  if (!geometry || geometry.length < 2) return null;
+  let total = 0;
+  for (let i = 1; i < geometry.length; i++) total += metresBetween(geometry[i - 1], geometry[i]);
+  let covered = 0;
+  for (let i = 1; i < geometry.length; i++) {
+    covered += metresBetween(geometry[i - 1], geometry[i]);
+    if (covered >= total / 2) return geometry[i];
+  }
+  return geometry[geometry.length - 1];
+}
+
+function activityWord() {
+  return recommendation && recommendation.activity_type === "cycle" ? "ride" : "walk";
+}
+
+function announceStart() {
+  unlockSound();
+  session.turnAnnounced = false;
+  el("back-home").hidden = true;
+  journeyAlert("start", "Your " + activityWord() + " has started",
+    "Follow the green line. We'll tell you when to turn back.");
+}
+
+function checkTurnaround(point) {
+  if (!session || session.turnAnnounced || !session.route_geometry || !point) return;
+  const turn = session.turnPoint || (session.turnPoint = turnPointOf(session.route_geometry));
+  if (!turn) return;
+  const atTurn = metresBetween(turn, point) < 35 && travelledMetres > session.distance_m * 0.3;
+  // GPS can drift wide of the exact spot; past halfway by distance is enough.
+  if (!atTurn && travelledMetres < session.distance_m * 0.55) return;
+  session.turnAnnounced = true;
+  if (session.label === "out_and_back") {
+    journeyAlert("turn", "Turn back now", "You've reached the turning point. Go back the way you came to your start.");
+  } else {
+    journeyAlert("turn", "Time to head back", "You're halfway. Keep following the green line. It brings you back to your start.");
+  }
+}
+
+// --- Sliding panel ----------------------------------------------------------------
+// While moving, the details slide off to the side so the map fills the
+// screen; a small live readout stays, and tapping it or the tab brings the
+// details back.
+let sheetHidden = false;
+function setSheetHidden(hidden) {
+  sheetHidden = hidden;
+  if (hidden) el("session-card").classList.add("slid-away");
+  else el("session-card").classList.remove("slid-away");
+  el("btn-sheet-show").hidden = !hidden;
+  el("mini-stats").hidden = !hidden;
+  if (map && lastFix && followMode) setTimeout(() => followPoint(lastFix, 0.3), 380);
+}
+el("btn-sheet-hide").onclick = () => setSheetHidden(true);
+el("btn-sheet-show").onclick = () => setSheetHidden(false);
+el("mini-stats").onclick = () => setSheetHidden(false);
+
 function resetJourney() {
   stopTracking();
+  setSheetHidden(false);
+  el("journey-alert").hidden = true;
   el("back-home").hidden = true;
   el("screen-route").classList.remove("is-journey");
   trackStartedAt = null;
@@ -1679,6 +1875,8 @@ function renderTrackStats() {
     stat(pace, "min / " + UNIT);
   el("goal-bar").hidden = false;
   el("goal-bar-fill").style.width = percent + "%";
+  el("mini-stats").innerHTML = "<b>" + minutes + ":" + String(seconds % 60).padStart(2, "0") + "</b>" +
+    "<b>" + distanceText(travelledMetres) + " <span>" + UNIT + "</span></b><b>" + percent + "% <span>of goal</span></b>";
 }
 
 function onFix(position) {
@@ -1707,6 +1905,7 @@ function onFix(position) {
     }
     if (followMode) followPoint(point, 0.5);
   }
+  checkTurnaround(point);
   checkBackHome(point);
   renderTrackStats();
 }
@@ -1760,6 +1959,8 @@ function startTracking() {
   el("track-out").hidden = false;
   el("btn-recentre").hidden = false;
   el("btn-track").textContent = "Stop tracking";
+  announceStart();
+  setTimeout(() => setSheetHidden(true), 2500);
   if (session.route_geometry) moveMap(session.route_geometry[0], 17);
   el("track-note").textContent =
     "Following you live. The orange line is where you have been; the green route " +
@@ -1797,6 +1998,8 @@ function startSimulation() {
   el("track-out").hidden = false;
   el("btn-recentre").hidden = false;
   el("btn-track").textContent = "Pause simulation";
+  if (!simulationTravelled) announceStart();
+  setTimeout(() => setSheetHidden(true), 2500);
   el("track-note").textContent = "Practice run: the blue dot follows the route in about 20 seconds. No GPS or real exercise is recorded.";
   if (map && map.setView && !simulationTravelled) map.setView(geometry[0], 17);
   renderTrackStats();
@@ -1819,6 +2022,7 @@ function startSimulation() {
       else meMarker = L.circleMarker(point, {radius: 10, color: "#1f6feb", weight: 3, fillColor: "#1f6feb", fillOpacity: 1, className: "me-dot"}).addTo(map);
       if (followMode) followPoint(point, 0.2);
     }
+    checkTurnaround(point);
     checkBackHome(point);
     renderTrackStats();
     if (simulationTravelled >= total) {
