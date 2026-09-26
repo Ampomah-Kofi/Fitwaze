@@ -349,3 +349,35 @@ test('route cards show measured sidewalks and busy roads', () => {
   assert.match(chips, /Sidewalks 82%/);
   assert.match(chips, /Busy roads 25%/);
 });
+
+test('height and weight are entered in feet, inches and pounds', () => {
+  const app = setup();
+  app.nodes.get('height_ft').value = '5';
+  app.nodes.get('height_in').value = '7';
+  app.nodes.get('weight_lb').value = '180';
+  const payload = app.run('profilePayload()');
+  assert.equal(payload.height_cm, 170.2);   // 67 in
+  assert.equal(payload.weight_kg, 81.6);    // 180 lb
+  app.run(`showUsUnits({height_cm: 182.9, weight_kg: 95.3})`);
+  assert.equal(app.nodes.get('height_ft').value, '6');
+  assert.equal(app.nodes.get('height_in').value, '0');
+  assert.equal(app.nodes.get('weight_lb').value, '210');
+});
+
+test('Google Maps gets the whole loop, starting and finishing at the start', () => {
+  const app = setup();
+  const url = app.run(`googleLoopUrl([[33.5186, -86.8104], [33.5200, -86.8104], [33.5200, -86.8090], [33.5186, -86.8104]], 'walk')`);
+  const params = new URL(url).searchParams;
+  assert.equal(params.get('origin'), '33.518600,-86.810400');
+  assert.equal(params.get('destination'), '33.518600,-86.810400');
+  assert.equal(params.get('travelmode'), 'walking');
+  assert(params.get('waypoints'));
+});
+
+test('an Apple Maps handoff is reminded to head back at the turn-back point', () => {
+  const app = setup();
+  app.run(`session = {status: 'selected', distance_m: 1000, label: 'small_loop', appleOutLeg: true,
+      route_geometry: [[33.5186, -86.8104], [33.5231, -86.8104], [33.5186, -86.8104]]};
+    travelledMetres = 600; checkTurnaround([33.5230, -86.8104]);`);
+  assert.match(app.nodes.get('journey-alert-text').textContent, /Directions back to my start/);
+});

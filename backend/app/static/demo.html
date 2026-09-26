@@ -488,6 +488,10 @@
   .plan-headline b { font-size: 40px; font-weight: 700; color: var(--accent); }
   .plan.hold { background: #ff3b3012; }
   .plan #btn-goroute { margin: 6px 0 14px; }
+  .unit-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .unit-field { position: relative; display: block; }
+  .unit-field input { padding-right: 34px; }
+  .unit-field span { position: absolute; right: 12px; top: 13px; color: var(--muted); font-size: 15px; pointer-events: none; }
   .plan-notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
   .plan-notes li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.45; color: var(--ink); }
   .plan-notes li::before { content: ""; position: absolute; left: 4px; top: .55em; width: 6px; height: 6px;
@@ -772,8 +776,15 @@
         <div class="pair">
           <div><label for="current_weekly_minutes">Active minutes / week</label><input id="current_weekly_minutes" type="number" value="45" min="0" max="3000" /></div>
           <div><label for="current_frequency">Sessions / week</label><input id="current_frequency" type="number" value="2" min="0" max="21" /></div>
-          <div><label for="height_cm">Height (cm)</label><input id="height_cm" type="number" value="165.5" step="0.1" /></div>
-          <div><label for="weight_kg">Weight (kg)</label><input id="weight_kg" type="number" value="68.2" step="0.1" /></div>
+          <div><label for="height_ft">Height</label>
+            <div class="unit-pair">
+              <span class="unit-field"><input id="height_ft" type="number" inputmode="numeric" min="3" max="8" value="5" aria-label="Height, feet" /><span>ft</span></span>
+              <span class="unit-field"><input id="height_in" type="number" inputmode="numeric" min="0" max="11" value="5" aria-label="Height, inches" /><span>in</span></span>
+            </div>
+            <input id="height_cm" type="hidden" value="165.1" /></div>
+          <div><label for="weight_lb">Weight</label>
+            <span class="unit-field"><input id="weight_lb" type="number" inputmode="decimal" min="45" max="880" value="150" /><span>lb</span></span>
+            <input id="weight_kg" type="hidden" value="68.0" /></div>
         </div>
         <label for="diabetes_status">Diabetes status</label>
         <select id="diabetes_status">
@@ -947,8 +958,9 @@
         <summary>Use another maps app (optional)</summary>
         <div class="side-by-side" style="margin-top:10px">
           <button id="btn-maps" class="quiet">Open in Maps</button>
-          <button id="btn-go-home" class="quiet">Directions home</button>
+          <button id="btn-gmaps" class="quiet">Google Maps: full loop</button>
         </div>
+        <button id="btn-go-home" class="quiet">Directions back to my start</button>
         <button id="btn-gpx" class="quiet">Download GPX</button>
         <p class="note" id="handoff-note"></p>
         </details>
@@ -1231,6 +1243,25 @@ async function api(path, options) {
   return data;
 }
 
+// People in the US think in feet, inches and pounds; the server stores
+// centimetres and kilograms, so convert at the edge.
+const CM_PER_INCH = 2.54, KG_PER_LB = 0.45359237;
+function heightCm() {
+  const feet = Number(el("height_ft").value), inches = Number(el("height_in").value);
+  if (!el("height_ft").value && !el("height_in").value) return Number(el("height_cm").value);
+  return Math.round(((feet || 0) * 12 + (inches || 0)) * CM_PER_INCH * 10) / 10;
+}
+function weightKg() {
+  if (!el("weight_lb").value) return Number(el("weight_kg").value);
+  return Math.round(Number(el("weight_lb").value) * KG_PER_LB * 10) / 10;
+}
+function showUsUnits(profile) {
+  const totalInches = Math.round(profile.height_cm / CM_PER_INCH);
+  el("height_ft").value = String(Math.floor(totalInches / 12));
+  el("height_in").value = String(totalInches % 12);
+  el("weight_lb").value = String(Math.round(profile.weight_kg / KG_PER_LB));
+}
+
 function profilePayload() {
   const num = (id) => Number(el(id).value);
   return {
@@ -1240,8 +1271,8 @@ function profilePayload() {
     preferred_activity: el("preferred_activity").value,
     current_weekly_minutes: num("current_weekly_minutes"),
     current_frequency: num("current_frequency"),
-    height_cm: num("height_cm"),
-    weight_kg: num("weight_kg"),
+    height_cm: heightCm(),
+    weight_kg: weightKg(),
     diabetes_status: el("diabetes_status").value,
     mobility_limitations: el("mobility_limitations").value,
     walking_ability: el("walking_ability").value,
@@ -1286,6 +1317,7 @@ async function authenticate(path) {
         if (typeof profile[field] === "boolean") el(field).checked = profile[field];
         else el(field).value = profile[field] === null ? "" : String(profile[field]);
       }
+      showUsUnits(profile);
       el("profile-editor").open = false;
     } catch (error) {
       el("profile-editor").open = true;
@@ -2070,7 +2102,9 @@ function checkTurnaround(point) {
   // GPS can drift wide of the exact spot; past halfway by distance is enough.
   if (!atTurn && travelledMetres < session.distance_m * 0.55) return;
   session.turnAnnounced = true;
-  if (session.label === "out_and_back") {
+  if (session.appleOutLeg) {
+    journeyAlert("turn", "Turn back now", "Head back to your start. Open the panel and tap Directions back to my start for Apple Maps directions.");
+  } else if (session.label === "out_and_back") {
     journeyAlert("turn", "Turn back now", "You've reached the turning point. Go back the way you came to your start.");
   } else {
     journeyAlert("turn", "Time to head back", "You're halfway. Keep following the green line. It brings you back to your start.");
@@ -2381,33 +2415,54 @@ function farthestPoint(geometry, origin) {
   return best;
 }
 
-function mapsUrlFor(geometry, activityType) {
-  const origin = geometry[0];
+// Every handoff ends where the walk began: the loop is a round trip, and
+// the other app is told so.
+function googleLoopUrl(geometry, activityType) {
   const coord = (point) => point[0].toFixed(6) + "," + point[1].toFixed(6);
-
-  if (IS_IOS) {
-    // dirflg: w = walking, d = driving. Apple Maps has no cycling directions
-    // flag, so a cycle route is handed over as a walking one.
-    const destination = farthestPoint(geometry, origin);
-    return {
-      url: "https://maps.apple.com/?saddr=" + coord(origin) + "&daddr=" + coord(destination) + "&dirflg=w",
-      note: "Apple Maps takes only a start and an end, so it will navigate you to the far " +
-            "point of the loop — the return leg is yours. Download the GPX for the exact route.",
-    };
-  }
-
+  const start = geometry[0];
   const waypoints = sampleWaypoints(geometry, 8).map(coord).join("|");
   const travelMode = activityType === "cycle" ? "bicycling" : "walking";
+  // Origin and destination are both the start, so Google shows the whole
+  // loop out, round the turn-back point, and home again.
+  return "https://www.google.com/maps/dir/?api=1&origin=" + coord(start) +
+    "&destination=" + coord(start) + "&travelmode=" + travelMode +
+    (waypoints ? "&waypoints=" + encodeURIComponent(waypoints) : "");
+}
+
+function mapsUrlFor(geometry, activityType) {
+  const coord = (point) => point[0].toFixed(6) + "," + point[1].toFixed(6);
+  const start = geometry[0];
+
+  if (IS_IOS) {
+    // An Apple Maps link takes one start and one destination, no stops. So it
+    // is sent to the turn-back point, and the way back is a second step:
+    // FitWaze says "Turn back" there and offers directions back to the start.
+    // dirflg=w: walking (Apple Maps has no cycling flag).
+    const turn = (session && session.turnPoint) || turnPointOf(geometry) || farthestPoint(geometry, start);
+    return {
+      url: "https://maps.apple.com/?saddr=" + coord(start) + "&daddr=" + coord(turn) + "&dirflg=w",
+      note: "Apple Maps takes you to the turn-back point. When you get there, FitWaze tells you to turn " +
+            "back: tap \"Directions back to my start\" for the way home. For the whole loop in one go, " +
+            "use Google Maps.",
+      returnLeg: true,
+    };
+  }
   return {
-    url: "https://www.google.com/maps/dir/?api=1&origin=" + coord(origin) +
-         "&destination=" + coord(origin) + "&travelmode=" + travelMode +
-         (waypoints ? "&waypoints=" + encodeURIComponent(waypoints) : ""),
-    note: "Google Maps accepts up to 9 waypoints, so this is a close approximation of the " +
-          "loop rather than the exact path. Download the GPX for the exact route.",
+    url: googleLoopUrl(geometry, activityType),
+    note: "Google Maps shows the whole loop and finishes back at your start. It follows up to 9 points of " +
+          "the route, so it is close to, not exactly, the FitWaze route.",
+    returnLeg: false,
   };
 }
 
-el("btn-maps").textContent = IS_IOS ? "Open in Apple Maps" : "Open in Google Maps";
+el("btn-maps").textContent = IS_IOS ? "Apple Maps: to turn-back point" : "Google Maps: full loop";
+el("btn-gmaps").hidden = !IS_IOS; // off iPhone the main button already is Google Maps
+el("btn-gmaps").onclick = () => {
+  if (!session || !session.route_geometry) return;
+  const activityType = recommendation ? recommendation.activity_type : "walk";
+  el("handoff-note").textContent = "Google Maps shows the whole loop and finishes back at your start.";
+  window.open(googleLoopUrl(session.route_geometry, activityType), "_blank", "noopener");
+};
 
 // Walking directions back to the start (home, if that is where it began), in
 // the phone's own maps app. Optional: the in-app route is already a loop home.
@@ -2433,6 +2488,7 @@ el("btn-maps").onclick = () => {
   const activityType = recommendation ? recommendation.activity_type : "walk";
   const handoff = mapsUrlFor(session.route_geometry, activityType);
   el("handoff-note").textContent = handoff.note;
+  session.appleOutLeg = Boolean(handoff.returnLeg);
   window.open(handoff.url, "_blank", "noopener");
 };
 
