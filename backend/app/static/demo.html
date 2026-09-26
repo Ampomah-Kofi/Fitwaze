@@ -878,11 +878,13 @@ function initMap() {
   // location replaces it straight away.
   map = L.map("map", { zoomControl: false }).setView([33.5186, -86.8104], 12); // Birmingham, AL
   L.control.zoom({ position: "bottomright" }).addTo(map);
-  // CARTO Voyager: OpenStreetMap data drawn with quieter colours and clear
-  // street names, so a route line and a moving dot stand out on a phone.
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    maxZoom: 20, subdomains: "abcd",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  // OpenStreetMap's own map: real streets, paths, parks and building
+  // outlines, no API key. Its tile policy allows light use like this pilot
+  // (identified by the browser's Referer); a bigger launch should use a tile
+  // provider or self-hosted tiles.
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
   routeLayer = L.layerGroup().addTo(map);
 

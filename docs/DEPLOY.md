@@ -40,7 +40,7 @@ If routes fail, open the service's **Logs** in Render and look for
 | Database | Render Postgres (`plan: free`) | Free databases expire after 30 days. Upgrade to a paid plan (~$7/month) before real pilot data goes in. |
 | Street routing | FOSSGIS OSRM servers (`routing.openstreetmap.de`) | Free community service for light use. For the full pilot, self-host on the Alabama map (below). |
 | Hills | OpenTopoData `ned10m` (USGS 10 m) | Free public API: 1 request/second, 1,000/day (one request per route search, plus caching). |
-| Map background | CARTO Voyager tiles | Free for light non-commercial use. |
+| Map background | OpenStreetMap standard tiles | No key; fine for light pilot use under the OSM tile policy. Use a tile provider for a public launch. |
 
 ## Moving routing onto your own Alabama map
 
