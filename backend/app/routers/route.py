@@ -52,6 +52,9 @@ logger = logging.getLogger(__name__)
 # coarser record of where a user actually goes than the provider returns.
 _STORED_COORD_PRECISION = 4
 
+# Measured surroundings a provider may report, passed through to the client.
+_ENVIRONMENT_FACTS = ("ascent_m", "green_pct", "paths_pct", "busy_road_pct", "steps_pct")
+
 
 def _candidate_revision(route: RawRoute) -> str:
     data = asdict(route)
@@ -111,6 +114,10 @@ def get_route_options(
             score_breakdown=result.breakdown,
             explanation=result.explanation,
             unverified=sorted(route.unknown_attributes),
+            environment={
+                key: value for key, value in route.raw_attributes.items()
+                if key in _ENVIRONMENT_FACTS and isinstance(value, (int, float))
+            },
             geometry=route.geometry,
         )
         for route, result in selection.ranked

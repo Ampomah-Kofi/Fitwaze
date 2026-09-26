@@ -21,10 +21,12 @@ from app.models.enums import (
     AbilityEnum,
     ActivityTypeEnum,
     DiabetesStatusEnum,
+    FeelingEnum,
     GoalEnum,
     MobilityLimitationEnum,
     PreferredActivityEnum,
 )
+from app.schemas.activity import DailyCheckIn
 from app.schemas.profile import HealthProfileData
 
 DISCLAIMER = "This is general wellness guidance, not medical advice"
@@ -41,8 +43,31 @@ _MOBILITY_DURATION_FACTOR = 0.8
 _MIN_DURATION_MINUTES = 10
 
 
+# --- Daily check-in thresholds (mmol/L) -------------------------------------
+# Based on widely used patient guidance for exercising with diabetes (e.g. the
+# ADA's 2016 position statement on physical activity and diabetes). They are
+# product safety rules for a wellness app, deliberately named and module-level
+# so a clinician can review and adjust them; they are not a treatment plan.
+HYPO_BELOW_MMOL_L = 3.9  # 70 mg/dL: treat the low first, do not start
+LOW_NORMAL_BELOW_MMOL_L = 5.6  # 100 mg/dL: fine, but have a snack first
+HIGH_FROM_MMOL_L = 13.9  # 250 mg/dL: keep it short and gentle
+VERY_HIGH_FROM_MMOL_L = 16.7  # 300 mg/dL: skip until it comes down
+
+HIGH_GLUCOSE_MAX_MINUTES = 15
+TIRED_DURATION_FACTOR = 0.75
+
+
 class ActivityUnavailableError(ValueError):
     """No requested walking/cycling activity is supported by this profile."""
+
+
+class CheckInHoldError(ActivityUnavailableError):
+    """Today's check-in says this is not a day to start exercising.
+
+    Subclasses ActivityUnavailableError so callers that already handle "no
+    activity today" handle this too; the message tells the person what to do
+    instead.
+    """
 
 
 @dataclass
@@ -162,8 +187,97 @@ def _apply_mobility_reduction(
     return reduced, note
 
 
-def recommend_activity(profile: HealthProfileData, activity_type: ActivityTypeEnum | None = None) -> ActivityRecommendationResult:
-    if activity_type is None:
+def _check_in_hold(checkin: DailyCheckIn) -> str | None:
+    """Why today's check-in rules out starting any activity, or None."""
+    if checkin.warning_symptoms:
+        return (
+            "The symptoms you reported need attention before exercise. Please rest and contact "
+            "your doctor or nurse today. If they are severe or getting worse, seek emergency help."
+        )
+    if checkin.feeling == FeelingEnum.unwell:
+        return (
+            "You told us you feel unwell, so today is a rest day. Check your blood sugar more "
+            "often while you are ill, and contact your care team if you are not improving."
+        )
+    glucose = checkin.glucose_mmol_l
+    if glucose is not None and glucose < HYPO_BELOW_MMOL_L:
+        return (
+            "Your blood sugar is low. Treat it first with 15 g of fast sugar (such as half a glass "
+            "of juice or 3-4 glucose tablets), recheck after 15 minutes, and check in again once "
+            "it is back in range."
+        )
+    if glucose is not None and glucose >= VERY_HIGH_FROM_MMOL_L:
+        return (
+            "Your blood sugar is very high for exercise right now. Drink water, take your usual "
+            "medication as prescribed, and check in again when it has come down. Contact your "
+            "care team if it stays this high."
+        )
+    return None
+
+
+def _apply_check_in(duration_minutes: int, checkin: DailyCheckIn) -> tuple[int, list[str]]:
+    """Adjust today's duration for how the person is this morning.
+
+    Like the other rules, notes describe which band applied and never repeat
+    the reading itself.
+    """
+    notes: list[str] = []
+    glucose = checkin.glucose_mmol_l
+
+    if checkin.feeling == FeelingEnum.tired:
+        duration_minutes = max(_MIN_DURATION_MINUTES, round(duration_minutes * TIRED_DURATION_FACTOR))
+        notes.append("You said you feel tired this morning, so we've shortened today's session.")
+
+    if glucose is not None:
+        if glucose < LOW_NORMAL_BELOW_MMOL_L:
+            notes.append(
+                "Your blood sugar is on the low side for exercise: have a small carbohydrate snack "
+                "before you start and carry fast sugar with you."
+            )
+        elif glucose >= HIGH_FROM_MMOL_L:
+            duration_minutes = min(duration_minutes, HIGH_GLUCOSE_MAX_MINUTES)
+            notes.append(
+                "Your blood sugar is high, so keep today's session short and gentle, drink water "
+                "before and after, and stop if you feel unwell."
+            )
+        else:
+            notes.append("Your blood sugar is in a good range for activity this morning.")
+
+    return duration_minutes, notes
+
+
+def recommend_activity(
+    profile: HealthProfileData,
+    activity_type: ActivityTypeEnum | None = None,
+    checkin: DailyCheckIn | None = None,
+) -> ActivityRecommendationResult:
+    foot_note = None
+    if checkin is not None:
+        hold = _check_in_hold(checkin)
+        if hold:
+            raise CheckInHoldError(hold)
+        if checkin.foot_problem:
+            # Walking on a foot wound is how a small diabetic foot problem
+            # becomes a serious one: take walking off the table for today.
+            if profile.cycling_ability == AbilityEnum.unable:
+                raise CheckInHoldError(
+                    "With a sore, blister or swelling on your feet, please don't walk on it today. "
+                    "Keep it clean and covered, and have it checked by your doctor or nurse."
+                )
+            if activity_type == ActivityTypeEnum.walk:
+                raise ActivityUnavailableError(
+                    "With a sore, blister or swelling on your feet, please don't walk on it today. "
+                    "Choose cycling for this session instead, or rest."
+                )
+            activity_type = ActivityTypeEnum.cycle
+            foot_note = (
+                "Because of the foot problem you reported, we're suggesting cycling today to keep "
+                "weight off your feet. Have it checked if it is not healing."
+            )
+
+    if foot_note:
+        activity_reason = foot_note
+    elif activity_type is None:
         activity_type, activity_reason = _pick_activity_type(profile)
     else:
         ability = profile.walking_ability if activity_type == ActivityTypeEnum.walk else profile.cycling_ability
@@ -182,6 +296,10 @@ def recommend_activity(profile: HealthProfileData, activity_type: ActivityTypeEn
     for note in (goal_note, diabetes_note, mobility_note):
         if note:
             notes.append(note)
+
+    if checkin is not None:
+        duration, checkin_notes = _apply_check_in(duration, checkin)
+        notes.extend(checkin_notes)
 
     rationale = " ".join(notes)
 

@@ -33,6 +33,10 @@ class RouteOptionSchema(BaseModel):
     # Attributes the provider could not measure for this route, so the caller
     # can say what is known rather than implying every number is surveyed.
     unverified: list[str] = []
+    # Measured facts about the surroundings, present only when the provider
+    # measured them: ascent_m (total climb), green_pct, paths_pct,
+    # busy_road_pct, steps_pct. A missing key means unknown, not zero.
+    environment: dict[str, float] = {}
     geometry: list[tuple[float, float]]  # (lat, lon) points, full precision (not persisted)
 
 

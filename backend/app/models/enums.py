@@ -64,3 +64,20 @@ class SessionStatusEnum(str, enum.Enum):
     selected = "selected"
     completed = "completed"
     abandoned = "abandoned"
+
+
+class GlucoseUnitEnum(str, enum.Enum):
+    """Both units are in everyday use: mmol/L in Ghana, the UK and most of the
+    world, mg/dL in the US. The engine works in mmol/L internally."""
+
+    mmol_l = "mmol/L"
+    mg_dl = "mg/dL"
+
+
+class FeelingEnum(str, enum.Enum):
+    """How the person says they feel this morning, for the daily check-in."""
+
+    good = "good"
+    okay = "okay"
+    tired = "tired"
+    unwell = "unwell"

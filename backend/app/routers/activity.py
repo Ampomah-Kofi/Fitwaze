@@ -1,8 +1,10 @@
 """Activity recommendation endpoint.
 
 POST /activity/recommendation reads the CALLING user's own health profile
-(never a client-supplied id), runs the pure `recommend_activity` engine
-function, persists the result, and returns it.
+(never a client-supplied id), combines it with the optional morning check-in
+(today's glucose reading, how they feel, warning signs), runs the pure
+`recommend_activity` engine function, persists the result, and returns it.
+The check-in itself is not stored.
 """
 from __future__ import annotations
 
@@ -38,7 +40,11 @@ def create_activity_recommendation(
 
     profile_data = profile_to_data(profile)
     try:
-        result = recommend_activity(profile_data, payload.activity_type if payload else None)
+        result = recommend_activity(
+            profile_data,
+            payload.activity_type if payload else None,
+            payload.checkin if payload else None,
+        )
     except ActivityUnavailableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
