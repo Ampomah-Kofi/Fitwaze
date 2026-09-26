@@ -46,8 +46,20 @@ class Settings(BaseSettings):
     )
 
     # --- Route engine ---
-    route_provider: str = Field(default="mock", alias="ROUTE_PROVIDER")
+    # "osrm" (default): real street-following routes, no key. "ors": the same
+    # plus measured hills and surroundings, needs ORS_API_KEY. "mock":
+    # synthetic straight-line shapes for offline tests only.
+    route_provider: str = Field(default="osrm", alias="ROUTE_PROVIDER")
     ors_api_key: str = Field(default="", alias="ORS_API_KEY")
+    # OSRM Route service endpoints, one per profile. Defaults are the free
+    # FOSSGIS servers; point them at the self-hosted Alabama servers from
+    # docker-compose (see scripts/prepare-alabama-map.sh) for production use.
+    osrm_foot_url: str = Field(
+        default="https://routing.openstreetmap.de/routed-foot/route/v1/foot", alias="OSRM_FOOT_URL"
+    )
+    osrm_bike_url: str = Field(
+        default="https://routing.openstreetmap.de/routed-bike/route/v1/bike", alias="OSRM_BIKE_URL"
+    )
     # How long generated candidate routes are reused for the same start point.
     # Keeps a live provider inside its free-tier quota and keeps /route/select
     # consistent with what /route/options showed. 0 disables caching.

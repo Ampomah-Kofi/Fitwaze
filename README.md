@@ -25,20 +25,35 @@ needs no credit card — which is deliberate, since this build is an MVP/demo.
 
 ### 1. Routing data (backend)
 
-This is what feeds `RouteProvider.get_candidate_routes()`. Two providers ship
-in the repo, selected with the `ROUTE_PROVIDER` environment variable:
+This is what feeds `RouteProvider.get_candidate_routes()`. Three providers
+ship in the repo, selected with the `ROUTE_PROVIDER` environment variable:
 
 | `ROUTE_PROVIDER` | What it does | Cost |
 | --- | --- | --- |
-| `mock` (default) | Deterministic synthetic routes, no network calls, no key | Free, works offline |
-| `ors` | Real routes from OpenRouteService's round-trip Directions API | Free tier, ~2,000 requests/day |
+| `osrm` (default) | Real walking/cycling loops along streets and paths (OSRM on OpenStreetMap). Defaults to the free FOSSGIS servers; self-host for Alabama (below) | Free, no key |
+| `ors` | OpenRouteService round trips, plus measured hills, steps, busy roads and greenery | Free tier, ~2,000 requests/day |
+| `mock` | Synthetic straight-line shapes, no network. Used by the test suite; not for demos | Free, offline |
 
-The `mock` provider is what the test suite exercises and is enough to demo the
-full flow offline. To use real routes:
+Every route starts and ends at the person's home (or current location) and
+follows the street network, so it never cuts through buildings.
 
-1. Sign up for a free key at <https://openrouteservice.org/dev/#/signup> (no
-   payment details required).
-2. Set `ROUTE_PROVIDER=ors` and `ORS_API_KEY=<your key>` in `backend/.env`.
+### Alabama: self-hosted map and routing
+
+The pilot runs in Alabama, so the whole state's OpenStreetMap data (a free
+~100 MB download from Geofabrik) can be routed on locally, with no API key
+and no usage limit:
+
+```bash
+./scripts/prepare-alabama-map.sh          # Windows: .\scripts\prepare-alabama-map.ps1
+docker compose --profile alabama up -d    # starts osrm-foot (:5001) and osrm-bike (:5002)
+```
+
+Then set `ROUTE_PROVIDER=osrm`, `OSRM_FOOT_URL=http://localhost:5001/route/v1/foot`
+and `OSRM_BIKE_URL=http://localhost:5002/route/v1/bike` in `backend/.env`
+(inside `docker compose` the backend is pointed at them automatically).
+Re-run the script now and then for fresher map data. OSRM does not measure
+hills or surroundings; use `ors` for those until elevation data is added to
+the self-hosted stack.
 
 **Quota maths.** One `POST /route/options` costs three ORS requests (one per
 candidate shape), so a 2,000/day budget is roughly 660 route-option requests per

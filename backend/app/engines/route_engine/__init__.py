@@ -1,7 +1,7 @@
 """Route provider selection.
 
 `get_route_provider()` returns the configured `RouteProvider` implementation
-based on the `ROUTE_PROVIDER` env var ("mock", default, or "ors"). This is
+based on the `ROUTE_PROVIDER` env var ("osrm", default; "ors"; or "mock"). This is
 the single place that needs to change to plug in a new data source.
 """
 from __future__ import annotations
@@ -19,4 +19,8 @@ def get_route_provider() -> RouteProvider:
         from app.engines.route_engine.ors_provider import ORSRouteProvider
 
         return ORSRouteProvider()
-    return MockRouteProvider()
+    if settings.route_provider.lower() == "mock":
+        return MockRouteProvider()
+    from app.engines.route_engine.osrm_provider import OSRMRouteProvider
+
+    return OSRMRouteProvider()

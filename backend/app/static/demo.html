@@ -671,9 +671,9 @@
         </div>
         <label for="glucose">Blood sugar reading <span style="font-weight:400">(optional)</span></label>
         <div class="glucose-row">
-          <input id="glucose" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 6.4" />
+          <input id="glucose" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 115" />
           <select id="glucose-unit" aria-label="Blood sugar unit">
-            <option value="mmol/L">mmol/L</option><option value="mg/dL">mg/dL</option>
+            <option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option>
           </select>
         </div>
         <label class="check"><input type="checkbox" id="foot-problem" /> A new sore, blister, cut or swelling on my feet</label>
@@ -801,6 +801,13 @@ const simulatedSessions = [];
 const RANK_COLORS = ["#248a3d", "#ff9500", "#5856d6"];
 const el = (id) => document.getElementById(id);
 
+// FitWaze is being piloted in Alabama, so distances read in miles. Flip this
+// to false for kilometres elsewhere.
+const USE_MILES = true;
+const METRES_PER_UNIT = USE_MILES ? 1609.344 : 1000;
+const UNIT = USE_MILES ? "mi" : "km";
+function distanceText(metres) { return (metres / METRES_PER_UNIT).toFixed(2); }
+
 let offeredContext = null;
 let routeRequestVersion = 0;
 let selectingRoute = false;
@@ -869,7 +876,7 @@ function initMap() {
   }
   // Only the view before we know where the person is; home or their current
   // location replaces it straight away.
-  map = L.map("map", { zoomControl: false }).setView([5.6037, -0.187], 13);
+  map = L.map("map", { zoomControl: false }).setView([33.5186, -86.8104], 12); // Birmingham, AL
   L.control.zoom({ position: "bottomright" }).addTo(map);
   // CARTO Voyager: OpenStreetMap data drawn with quieter colours and clear
   // street names, so a route line and a moving dot stand out on a phone.
@@ -1112,7 +1119,7 @@ function checkinPayload() {
   return {
     feeling: todayFeeling,
     glucose_value: reading && Number.isFinite(value) && value > 0 ? value : null,
-    glucose_unit: el("glucose-unit").value || "mmol/L",
+    glucose_unit: el("glucose-unit").value || "mg/dL",
     foot_problem: Boolean(el("foot-problem").checked),
     warning_symptoms: Boolean(el("warning-symptoms").checked),
   };
@@ -1321,7 +1328,7 @@ function routeChips(option) {
   const factors = option.score_breakdown || {};
   const environment = option.environment || {};
   const chips = [
-    ["", (option.distance_m / 1000).toFixed(2) + " km"],
+    ["", distanceText(option.distance_m) + " " + UNIT],
     ["", Math.round(option.estimated_minutes) + " min"],
   ];
   if (!unverified.includes("slope") && factors.slope_inv !== undefined) {
@@ -1414,12 +1421,15 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
     drawOptions(data.options);
     showRoutePanel("routes");
 
-    const isReal = data.provider === "ors";
-    const banner = isReal
-      ? '<div class="banner real">Real walking and cycling routes from OpenStreetMap, checked for ' +
-        "hills, steps, traffic and greenery around you.</div>"
-      : '<div class="banner mock">Practice routes: sample loops for this demo that do not follow ' +
-        "real streets. Add an OpenRouteService key on the server for real routes.</div>";
+    const banners = {
+      ors: '<div class="banner real">Routes along real streets and paths near you, checked for ' +
+        "hills, steps, traffic and greenery.</div>",
+      osrm: '<div class="banner real">Routes along real streets and paths near you, from ' +
+        "OpenStreetMap. Hills and surroundings are not measured by this route source.</div>",
+    };
+    const banner = banners[data.provider] ||
+      '<div class="banner mock">Practice routes: sample shapes that do not follow real streets. ' +
+      "Only for testing without a routing server.</div>";
 
     // Routes the engine withheld as unsuitable, with the reason. Saying this
     // out loud is the point: a silent filter looks like a bug or a short list.
@@ -1522,7 +1532,7 @@ function renderSession() {
   el("session-title").textContent = (session.simulated ? "Practice " : "Your ") + (activity === "cycle" ? "ride" : "walk");
   el("session-out").innerHTML =
     '<div class="chips">' +
-    '<span class="chip">' + (session.distance_m / 1000).toFixed(2) + " km</span>" +
+    '<span class="chip">' + distanceText(session.distance_m) + " " + UNIT + "</span>" +
     '<span class="chip">' + esc(session.estimated_minutes) + " min</span></div>";
   const terminal = session.status === "completed" || session.status === "abandoned";
   el("btn-complete").disabled = terminal;
@@ -1651,7 +1661,7 @@ function renderTrackStats() {
   const minutes = Math.floor(seconds / 60);
   const target = recommendation ? recommendation.duration_minutes : 0;
   const pace = travelledMetres > 50 && seconds > 0
-    ? ((seconds / 60) / (travelledMetres / 1000)).toFixed(1) + " min/km"
+    ? ((seconds / 60) / (travelledMetres / METRES_PER_UNIT)).toFixed(1)
     : "—";
   const stat = (value, caption) =>
     '<div class="stat"><b>' + value + "</b><span>" + caption + "</span></div>";
@@ -1659,8 +1669,8 @@ function renderTrackStats() {
   const percent = Math.round(Math.min(100, target ? (seconds / 60 / target) * 100 : 0));
   el("track-out").innerHTML =
     stat(minutes + ":" + String(seconds % 60).padStart(2, "0"), (target ? "of " + target + " min" : "time")) +
-    stat((travelledMetres / 1000).toFixed(2), "km") +
-    stat(pace === "—" ? "—" : pace.replace(" min/km", ""), "min / km");
+    stat(distanceText(travelledMetres), UNIT === "mi" ? "miles" : "km") +
+    stat(pace, "min / " + UNIT);
   el("goal-bar").hidden = false;
   el("goal-bar-fill").style.width = percent + "%";
 }
@@ -1951,7 +1961,7 @@ async function refreshProgress() {
     el("progress-out").innerHTML =
       stat(progress.sessions_completed + " / " + progress.sessions_selected, "sessions completed") +
       stat(Math.round(progress.completion_rate * 100) + "%", "completion rate") +
-      stat((progress.total_distance_m / 1000).toFixed(2) + " km", "distance covered") +
+      stat(distanceText(progress.total_distance_m) + " " + UNIT, "distance covered") +
       stat(progress.total_active_minutes, "active minutes") +
       stat(progress.last_7_days_minutes, "minutes, last 7 days") +
       stat(progress.current_streak_days, "day streak");
