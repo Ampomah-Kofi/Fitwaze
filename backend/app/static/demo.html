@@ -1197,12 +1197,15 @@ async function selectRoute(label, simulate = false) {
     el("session-card").hidden = false;
     resetJourney();
     invalidateOptions();
-    showRoutePanel("map");
     renderSession();
+    // Go straight to the journey layout: the chosen route on the map with the
+    // Start button right under it, not below the start-point controls.
+    enterJourney();
     if (map) {
       optionLines = [];
       routeLayer.clearLayers();
-      L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
+      const chosen = L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
+      if (chosen.getBounds) setTimeout(() => { map.invalidateSize(); map.fitBounds(chosen.getBounds().pad(0.2)); }, 50);
     }
     toast(simulate ? "Simulation selected. No real activity will be recorded." : "Route selected. Ready when you are.");
     refreshProgress();
