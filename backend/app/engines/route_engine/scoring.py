@@ -369,6 +369,9 @@ def feasibility_problem(
     withholding a route because of a placeholder value would quietly hide most
     of the map whenever the data is thin.
     """
+    # Measured danger rules a route out for everyone, whatever their profile.
+    if route.hazard_reason:
+        return route.hazard_reason
     if profile is None:
         return None
 

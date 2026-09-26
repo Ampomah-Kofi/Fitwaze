@@ -56,7 +56,8 @@ logger = logging.getLogger(__name__)
 _STORED_COORD_PRECISION = 4
 
 # Measured surroundings a provider may report, passed through to the client.
-_ENVIRONMENT_FACTS = ("ascent_m", "green_pct", "paths_pct", "busy_road_pct", "steps_pct")
+_ENVIRONMENT_FACTS = ("ascent_m", "green_pct", "paths_pct", "busy_road_pct", "steps_pct",
+                      "sidewalk_pct", "bike_lane_pct", "lit_pct")
 
 
 def _candidate_revision(route: RawRoute) -> str:

@@ -341,3 +341,11 @@ test('a server crash shows a plain message, not a JSON parse error', async () =>
   assert.match(app.nodes.get('status').textContent, /server had a problem \(error 500\)/);
   assert.doesNotMatch(app.nodes.get('status').textContent, /JSON|Unexpected token/);
 });
+
+test('route cards show measured sidewalks and busy roads', () => {
+  const app = setup();
+  const chips = app.run(`routeChips({distance_m: 1609, estimated_minutes: 20, unverified: [],
+    score_breakdown: {traffic_exposure_inv: 0.7}, environment: {sidewalk_pct: 82, busy_road_pct: 25}})`);
+  assert.match(chips, /Sidewalks 82%/);
+  assert.match(chips, /Busy roads 25%/);
+});

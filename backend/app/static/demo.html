@@ -487,6 +487,11 @@
   .plan { border: 0; background: var(--bg); border-radius: 12px; }
   .plan-headline b { font-size: 40px; font-weight: 700; color: var(--accent); }
   .plan.hold { background: #ff3b3012; }
+  .plan #btn-goroute { margin: 6px 0 14px; }
+  .plan-notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .plan-notes li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.45; color: var(--ink); }
+  .plan-notes li::before { content: ""; position: absolute; left: 4px; top: .55em; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--accent); }
   .plan.hold h3 { color: var(--bad); }
   .disclaimer { border-top: .5px solid var(--line); color: var(--muted); font-size: 12px; }
 
@@ -577,13 +582,15 @@
      translucent black, heavy blur, white type. Everything on the page
      stays light; only what floats on the map goes dark.
      ====================================================================== */
-  :root { --glass: rgba(22, 22, 24, .72); --glass-strong: rgba(22, 22, 24, .84); --glass-line: rgba(255, 255, 255, .12);
-    --glass-fill: rgba(255, 255, 255, .1); --glass-ink: #ffffff; --glass-muted: rgba(235, 235, 245, .6); }
+  /* Light frosted glass (iOS "regular material"): white translucency over
+     the map, dark type, hairline edge. */
+  :root { --glass: rgba(255, 255, 255, .72); --glass-strong: rgba(255, 255, 255, .86); --glass-line: rgba(0, 0, 0, .08);
+    --glass-fill: rgba(118, 118, 128, .14); --glass-ink: #1c1c1e; --glass-muted: rgba(60, 60, 67, .64); }
   .glass, #screen-route.is-journey #session-card, .mini-stats, .sheet-tab, .map-fab, .locate-fab, .help-sheet {
     -webkit-backdrop-filter: saturate(180%) blur(28px); backdrop-filter: saturate(180%) blur(28px);
   }
   #screen-route.is-journey #session-card { background: var(--glass) !important; color: var(--glass-ink);
-    border: .5px solid var(--glass-line); box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
+    border: .5px solid var(--glass-line); box-shadow: 0 18px 50px rgba(0, 0, 0, .18); }
   #screen-route.is-journey #session-card h3 { color: var(--glass-ink); }
   #screen-route.is-journey #session-card .note, #screen-route.is-journey #session-card .session-tools summary { color: var(--glass-muted); }
   #screen-route.is-journey #session-card .chip { background: var(--glass-fill); color: var(--glass-ink); }
@@ -592,18 +599,18 @@
   #screen-route.is-journey #track-out .stat span { color: var(--glass-muted); }
   #screen-route.is-journey .goal-bar { background: var(--glass-fill); }
   #screen-route.is-journey #session-card button.quiet { background: var(--glass-fill); color: var(--glass-ink); }
-  #screen-route.is-journey #session-card button.ghost { background: rgba(48, 209, 88, .2); color: #30d158; }
-  #screen-route.is-journey #session-card button.danger { background: rgba(255, 69, 58, .2); color: #ff453a; }
+  #screen-route.is-journey #session-card button.ghost { background: rgba(52, 199, 89, .16); color: #248a3d; }
+  #screen-route.is-journey #session-card button.danger { background: rgba(255, 59, 48, .12); color: #d70015; }
   #screen-route.is-journey .sheet-hide { background: var(--glass-fill); color: var(--glass-ink); }
-  #screen-route.is-journey .sheet-grip { background: rgba(255, 255, 255, .3); }
-  #screen-route.is-journey .back-home { background: rgba(48, 209, 88, .2); color: #30d158; }
+  #screen-route.is-journey .sheet-grip { background: rgba(60, 60, 67, .25); }
+  #screen-route.is-journey .back-home { background: rgba(52, 199, 89, .16); color: #248a3d; }
   .mini-stats, .sheet-tab { background: var(--glass) !important; color: var(--glass-ink) !important; border: .5px solid var(--glass-line); }
   .mini-stats span { color: var(--glass-muted) !important; }
-  .map-fab { background: var(--glass) !important; color: #64d2ff !important; border: .5px solid var(--glass-line) !important; }
+  .map-fab { background: var(--glass) !important; color: #007aff !important; border: .5px solid var(--glass-line) !important; }
 
   .locate-fab { position: absolute; right: 12px; top: 12px; z-index: 880; width: 48px; min-height: 48px; height: 48px; padding: 0;
-    margin: 0; border-radius: 14px; background: var(--glass); color: #64d2ff; border: .5px solid var(--glass-line);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, .25); display: grid; place-items: center; }
+    margin: 0; border-radius: 14px; background: var(--glass); color: #007aff; border: .5px solid var(--glass-line);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .14); display: grid; place-items: center; }
   .locate-fab svg { width: 22px; height: 22px; }
   .map-panel { position: relative; }
   #screen-route.is-journey .locate-fab { display: none; }
@@ -616,24 +623,24 @@
 
   .help-sheet { position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 910;
     padding: 20px 18px 14px; border-radius: 24px; background: var(--glass-strong); color: var(--glass-ink);
-    border: .5px solid var(--glass-line); box-shadow: 0 20px 60px rgba(0, 0, 0, .45); max-height: 86%; overflow-y: auto;
+    border: .5px solid var(--glass-line); box-shadow: 0 20px 60px rgba(0, 0, 0, .22); max-height: 86%; overflow-y: auto;
     animation: sheet-up .35s cubic-bezier(.22, .61, .36, 1) both; }
   .help-sheet[hidden] { display: none; }
   .help-sheet h3 { margin: 0 0 6px; font-size: 22px; color: var(--glass-ink); }
-  .help-sheet p, .help-sheet li { color: rgba(235, 235, 245, .82); font-size: 15px; line-height: 1.45; }
+  .help-sheet p, .help-sheet li { color: rgba(60, 60, 67, .85); font-size: 15px; line-height: 1.45; }
   .help-sheet ol { padding-left: 20px; margin: 8px 0 10px; display: grid; gap: 6px; }
-  .help-urgent { color: #ff9f0a !important; font-weight: 600; }
+  .help-urgent { color: #c93400 !important; font-weight: 600; }
   .help-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .help-btn { display: grid; place-items: center; min-height: 50px; margin: 0; padding: 10px; border-radius: 14px; border: 0;
-    background: #30d158; color: #002b0f; font: inherit; font-size: 16px; font-weight: 600; text-decoration: none; text-align: center; }
+    background: var(--accent); color: #fff; font: inherit; font-size: 16px; font-weight: 600; text-decoration: none; text-align: center; }
   .help-btn[hidden] { display: none; }
-  .help-btn.danger-btn { background: #ff453a; color: #fff; }
+  .help-btn.danger-btn { background: #ff3b30; color: #fff; }
   .help-btn.quiet-btn { background: var(--glass-fill); color: var(--glass-ink); }
   .finish-sheet label { color: var(--glass-muted); }
   .finish-sheet input, .finish-sheet select { background: var(--glass-fill); color: var(--glass-ink); }
   .finish-sheet .segmented { background: var(--glass-fill); }
   .finish-sheet .segmented button { color: var(--glass-ink); }
-  .finish-sheet .segmented button[aria-pressed="true"] { background: rgba(255, 255, 255, .9); color: #1c1c1e; }
+  .finish-sheet .segmented button[aria-pressed="true"] { background: #fff; color: #1c1c1e; box-shadow: 0 3px 8px #0000001f; }
   .finish-sheet button.quiet { background: var(--glass-fill); color: var(--glass-ink); margin-top: 8px; }
   .segmented-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @keyframes sheet-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
@@ -666,6 +673,18 @@
   @media (pointer: coarse) { .leaflet-control-zoom { display: none; } }
   .leaflet-container { touch-action: none; overscroll-behavior: contain; }
   html, body { overscroll-behavior-y: none; }
+
+  /* --- Keep every button above the bottom menu ------------------------------
+     On phones "100dvh" (or 100vh on older iPhones) can include the area
+     behind the browser's own toolbar, pushing the menu and the last buttons
+     off screen. Pinning the app to the visible viewport avoids that, and
+     each screen scrolls with room to spare above the menu. */
+  @media (max-width: 480px) {
+    #device { position: fixed; inset: 0; height: auto; max-width: none; }
+  }
+  main { scroll-padding-bottom: 96px; }
+  .screen { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+  #tabs { position: relative; z-index: 800; }
 
   /* Someone who has asked their OS for less motion gets none of it. */
   @media (prefers-reduced-motion: reduce) {
@@ -1349,8 +1368,9 @@ el("btn-recommend").onclick = busy(el("btn-recommend"), async () => {
       '<div class="plan"><span class="eyebrow">Today\'s plan</span>' +
       '<div class="plan-headline"><b>' + esc(recommendation.duration_minutes) + " min</b><span>" +
       esc(ACTIVITY_NAMES[recommendation.activity_type] || recommendation.activity_type) + "</span></div>" +
-      "<p>" + esc(recommendation.rationale) + "</p>" +
       '<button id="btn-goroute">Find a route near me</button>' +
+      '<ul class="plan-notes">' + recommendation.rationale.split(/(?<=[.!])\s+(?=[A-Z])/)
+        .filter(Boolean).map((note) => "<li>" + esc(note) + "</li>").join("") + "</ul>" +
       '<p class="disclaimer">' + esc(recommendation.disclaimer) + "</p></div>";
     el("btn-goroute").onclick = () => {
       showRoutePanel("map");
@@ -1544,9 +1564,21 @@ function routeChips(option) {
   }
   chips.push(unverified.includes("stairs") ? ["", "Steps unverified"] :
     factors.step_free === 1 ? ["good", "Step-free"] : ["warn", "Includes steps"]);
+  // Street details measured from OpenStreetMap, when the route source has them.
+  if (typeof environment.sidewalk_pct === "number") {
+    const pct = Math.round(environment.sidewalk_pct);
+    chips.push([pct >= 70 ? "good" : pct < 40 ? "warn" : "", "Sidewalks " + pct + "%"]);
+  }
+  if (typeof environment.bike_lane_pct === "number") {
+    const pct = Math.round(environment.bike_lane_pct);
+    chips.push([pct >= 50 ? "good" : "", "Bike lanes " + pct + "%"]);
+  }
   const traffic = factors.traffic_exposure_inv !== undefined ? "traffic_exposure" : "traffic_stress";
   const quiet = factors[traffic + "_inv"];
-  if (!unverified.includes(traffic) && quiet !== undefined) {
+  if (typeof environment.busy_road_pct === "number") {
+    const pct = Math.round(environment.busy_road_pct);
+    chips.push(pct <= 10 ? ["good", "Quiet streets"] : [pct >= 40 ? "warn" : "", "Busy roads " + pct + "%"]);
+  } else if (!unverified.includes(traffic) && quiet !== undefined) {
     if (quiet >= 0.7) chips.push(["good", "Quiet streets"]);
     else if (quiet < 0.4) chips.push(["warn", "Busy roads"]);
   }
@@ -1631,7 +1663,8 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
       ors: '<div class="banner real">Routes along real streets and paths near you, checked for ' +
         "hills, steps, traffic and greenery.</div>",
       osrm: '<div class="banner real">Routes along real streets and paths near you, from ' +
-        "OpenStreetMap, with hills checked against USGS elevation data.</div>",
+        "OpenStreetMap: hills checked against USGS data, and sidewalks, speed limits and bike lanes " +
+        "checked street by street. Routes along fast roads without sidewalks are not offered.</div>",
     };
     const banner = banners[data.provider] ||
       '<div class="banner mock">Practice routes: sample shapes that do not follow real streets. ' +

@@ -36,6 +36,7 @@ import httpx
 
 from app.config import get_settings
 from app.engines.route_engine.elevation import ElevationClient
+from app.engines.route_engine.osm_streets import StreetInfoClient, assess
 from app.engines.route_engine.base import (
     RawRoute,
     RouteProvider,
@@ -105,11 +106,13 @@ class OSRMRouteProvider(RouteProvider):
         foot_url: str | None = None,
         bike_url: str | None = None,
         elevation_url: str | None = None,
+        overpass_url: str | None = None,
         timeout_seconds: float = 10.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         settings = get_settings()
         self.elevation_url = settings.elevation_url if elevation_url is None else elevation_url
+        self.overpass_url = settings.overpass_url if overpass_url is None else overpass_url
         self.urls = {
             ActivityTypeEnum.walk: (foot_url or settings.osrm_foot_url).rstrip("/"),
             ActivityTypeEnum.cycle: (bike_url or settings.osrm_bike_url).rstrip("/"),
@@ -137,18 +140,22 @@ class OSRMRouteProvider(RouteProvider):
         ]
 
         routes: list[RawRoute] = []
+        segments: list[list[tuple[int, int, float]]] = []
         with httpx.Client(timeout=self.timeout_seconds, transport=self.transport) as client:
             for label, fraction, bearing in shape_specs:
                 wanted = max(300.0, target_m * fraction)
                 try:
-                    route = self._candidate(client, activity_type, start_lat, start_lon, label, wanted, bearing)
+                    route, route_segments = self._candidate(client, activity_type, start_lat, start_lon, label, wanted, bearing)
                 except (httpx.HTTPError, OSRMProviderError, KeyError, IndexError, TypeError, ValueError) as exc:
                     logger.warning("osrm_request_failed label=%s error=%s", label, type(exc).__name__)
                     continue
                 routes.append(route)
+                segments.append(route_segments)
 
             if routes and self.elevation_url:
                 self._add_topography(ElevationClient(self.elevation_url, client), routes)
+            if routes and self.overpass_url:
+                self._add_street_details(StreetInfoClient(self.overpass_url, client), routes, segments, activity_type)
 
         if not routes:
             raise OSRMProviderError("The routing server returned no usable routes")
@@ -164,7 +171,26 @@ class OSRMRouteProvider(RouteProvider):
             route.unknown_attributes = route.unknown_attributes - {"slope"}
             route.raw_attributes["ascent_m"] = round(topography[1], 1)
 
-    def _candidate(self, client, activity_type, lat, lon, label, wanted_m, bearing) -> RawRoute:
+    @staticmethod
+    def _add_street_details(streets: StreetInfoClient, routes: list[RawRoute],
+                            segments: list[list[tuple[int, int, float]]], activity_type) -> None:
+        """Measure sidewalks, traffic, paths and hazards along each route from
+        OpenStreetMap, with one lookup for all candidates."""
+        nodes = {node for route_segments in segments for a, b, _ in route_segments for node in (a, b)}
+        pairs = streets.tags_by_segment(nodes)
+        if pairs is None:
+            return
+        for route, route_segments in zip(routes, segments):
+            result = assess(route_segments, pairs, activity_type)
+            if result is None:
+                continue
+            for name, value in result["attributes"].items():
+                setattr(route, name, round(value, 3))
+            route.unknown_attributes = route.unknown_attributes - set(result["attributes"])
+            route.raw_attributes.update(result["facts"])
+            route.hazard_reason = result["hazard"] or ""
+
+    def _candidate(self, client, activity_type, lat, lon, label, wanted_m, bearing):
         length = wanted_m
         best = None
         for _attempt in range(2):
@@ -173,14 +199,14 @@ class OSRMRouteProvider(RouteProvider):
                 if label == "out_and_back"
                 else loop_waypoints(lat, lon, length, bearing)
             )
-            geometry, distance_m, duration_s = self._route(client, activity_type, lat, lon, waypoints)
-            best = (geometry, distance_m, duration_s)
+            geometry, distance_m, duration_s, route_segments = self._route(client, activity_type, lat, lon, waypoints)
+            best = (geometry, distance_m, duration_s, route_segments)
             if abs(distance_m - wanted_m) <= wanted_m * _LENGTH_TOLERANCE:
                 break
             # Resize the circle by how far off the streets took us, once.
             length = length * wanted_m / distance_m
 
-        geometry, distance_m, duration_s = best
+        geometry, distance_m, duration_s, route_segments = best
         route = RawRoute(
             geometry=geometry,
             distance_m=round(distance_m, 1),
@@ -192,13 +218,14 @@ class OSRMRouteProvider(RouteProvider):
         )
         if not returns_to_start(route, lat, lon):
             raise OSRMProviderError("Route does not return to the start")
-        return route
+        return route, route_segments
 
     def _route(self, client, activity_type, lat, lon, waypoints):
         stops = [(lat, lon), *waypoints, (lat, lon)]
         coordinates = ";".join(f"{p_lon:.6f},{p_lat:.6f}" for p_lat, p_lon in stops)  # OSRM wants lon,lat
         url = f"{self.urls[activity_type]}/{coordinates}"
-        response = client.get(url, params={"overview": "full", "geometries": "geojson", "steps": "false"})
+        response = client.get(url, params={"overview": "full", "geometries": "geojson", "steps": "false",
+                                           "annotations": "nodes,distance"})
         response.raise_for_status()
         data = response.json()
         if data.get("code") != "Ok" or not data.get("routes"):
@@ -225,4 +252,13 @@ class OSRMRouteProvider(RouteProvider):
             geometry.insert(0, start)
         if geometry[-1] != start:
             geometry.append(start)
-        return geometry, distance_m, duration_s
+
+        # The OpenStreetMap nodes each stretch runs between, so street details
+        # can be matched to the route exactly. Optional: servers may omit them.
+        route_segments: list[tuple[int, int, float]] = []
+        for leg in route.get("legs") or []:
+            annotation = leg.get("annotation") or {}
+            nodes, distances = annotation.get("nodes") or [], annotation.get("distance") or []
+            for (a, b), metres in zip(zip(nodes, nodes[1:]), distances):
+                route_segments.append((int(a), int(b), float(metres)))
+        return geometry, distance_m, duration_s, route_segments

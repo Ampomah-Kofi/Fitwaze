@@ -50,11 +50,12 @@ def _street_server(requests: list[httpx.Request], stretch: float = 1.0, snap_off
     return handler
 
 
-def _provider(handler, elevation_url: str = "") -> OSRMRouteProvider:
+def _provider(handler, elevation_url: str = "", overpass_url: str = "") -> OSRMRouteProvider:
     return OSRMRouteProvider(
         foot_url="https://osrm.test/route/v1/foot",
         bike_url="https://osrm.test/route/v1/bike",
         elevation_url=elevation_url,
+        overpass_url=overpass_url,
         transport=httpx.MockTransport(handler),
     )
 
