@@ -50,10 +50,11 @@ def _street_server(requests: list[httpx.Request], stretch: float = 1.0, snap_off
     return handler
 
 
-def _provider(handler) -> OSRMRouteProvider:
+def _provider(handler, elevation_url: str = "") -> OSRMRouteProvider:
     return OSRMRouteProvider(
         foot_url="https://osrm.test/route/v1/foot",
         bike_url="https://osrm.test/route/v1/bike",
+        elevation_url=elevation_url,
         transport=httpx.MockTransport(handler),
     )
 
@@ -120,3 +121,56 @@ def test_osrm_is_the_default_provider(monkeypatch):
 
     monkeypatch.setattr(get_settings(), "route_provider", "osrm")
     assert isinstance(get_route_provider(), OSRMRouteProvider)
+
+
+def _with_elevation(street_handler, elevation_of, calls: list):
+    """Street server plus an OpenTopoData stand-in on another host."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "elevation.test":
+            calls.append(request)
+            locations = request.url.params["locations"].split("|")
+            return httpx.Response(200, json={"status": "OK", "results": [
+                {"elevation": elevation_of(*map(float, loc.split(","))), "location": {}} for loc in locations
+            ]})
+        return street_handler(request)
+    return handler
+
+
+def test_hills_are_measured_in_one_elevation_request():
+    calls: list[httpx.Request] = []
+    # Ground rising 30 m per block northwards: steep everywhere it climbs.
+    rising = lambda lat, lon: (lat - START[0]) / BLOCK * 30.0
+    provider = _provider(_with_elevation(_street_server([]), rising, calls), elevation_url="https://elevation.test/v1/ned10m")
+    routes = provider.get_candidate_routes(*START, ActivityTypeEnum.walk, 20)
+
+    assert len(calls) == 1, "one lookup for all candidates (public API allows 1 request/second)"
+    assert len(calls[0].url.params["locations"].split("|")) <= 100
+    measured = [r for r in routes if "slope" not in r.unknown_attributes]
+    assert measured, "gradient measured"
+    assert any(r.slope > 0.5 and r.raw_attributes["ascent_m"] > 0 for r in measured)
+
+
+def test_flat_ground_measures_flat():
+    calls: list[httpx.Request] = []
+    provider = _provider(_with_elevation(_street_server([]), lambda lat, lon: 150.0, calls),
+                         elevation_url="https://elevation.test/v1/ned10m")
+    for route in provider.get_candidate_routes(*START, ActivityTypeEnum.walk, 20):
+        assert route.slope == 0.0 and "slope" not in route.unknown_attributes
+
+
+def test_elevation_outage_leaves_gradient_unverified_but_keeps_routes():
+    def handler(request):
+        if request.url.host == "elevation.test":
+            return httpx.Response(429)
+        return _street_server([])(request)
+    routes = _provider(handler, elevation_url="https://elevation.test/v1/ned10m").get_candidate_routes(
+        *START, ActivityTypeEnum.walk, 20)
+    assert len(routes) == 3
+    assert all("slope" in r.unknown_attributes for r in routes)
+
+
+def test_points_outside_coverage_stay_unverified():
+    calls: list[httpx.Request] = []
+    provider = _provider(_with_elevation(_street_server([]), lambda lat, lon: None, calls),
+                         elevation_url="https://elevation.test/v1/ned10m")
+    assert all("slope" in r.unknown_attributes for r in provider.get_candidate_routes(*START, ActivityTypeEnum.walk, 20))

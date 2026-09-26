@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     )
 
     # --- App ---
+    # "development" (default), "pilot" (hosted field test over HTTPS: secure
+    # cookies, demo app served) or "production" (secure cookies, no demo app).
     environment: str = Field(default="development", alias="ENVIRONMENT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
@@ -60,6 +62,10 @@ class Settings(BaseSettings):
     osrm_bike_url: str = Field(
         default="https://routing.openstreetmap.de/routed-bike/route/v1/bike", alias="OSRM_BIKE_URL"
     )
+    # OpenTopoData-compatible elevation service used to measure hills on OSRM
+    # routes. Default: USGS 10 m elevation (covers the US, incl. Alabama).
+    # Empty disables it, leaving gradient unverified.
+    elevation_url: str = Field(default="https://api.opentopodata.org/v1/ned10m", alias="ELEVATION_URL")
     # How long generated candidate routes are reused for the same start point.
     # Keeps a live provider inside its free-tier quota and keeps /route/select
     # consistent with what /route/options showed. 0 disables caching.

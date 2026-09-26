@@ -46,9 +46,10 @@ _GENERIC_LOGIN_ERROR = "Invalid email or password"
 
 def _cookie_secure() -> bool:
     # Secure cookies require HTTPS transport. We disable the flag outside of
-    # production so local/dev/test HTTP traffic can still exercise the
-    # refresh flow end-to-end; production deployments must terminate TLS.
-    return settings.environment.lower() == "production"
+    # hosted environments so local/dev/test HTTP traffic can still exercise
+    # the refresh flow end-to-end; hosted deployments (the field pilot and
+    # production) always sit behind TLS.
+    return settings.environment.lower() in ("production", "pilot")
 
 
 def _set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:

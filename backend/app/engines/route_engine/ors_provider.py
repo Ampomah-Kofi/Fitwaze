@@ -36,9 +36,9 @@ from app.engines.route_engine.base import (
     RawRoute,
     RouteProvider,
     RouteProviderError,
-    _metres_between,
     returns_to_start,
 )
+from app.engines.route_engine.elevation import measure_topography
 from app.models.enums import ActivityTypeEnum
 
 logger = logging.getLogger(__name__)
@@ -66,49 +66,6 @@ _UNMEASURED = frozenset({
     "trail_bonus", "safety_score", "bike_lane_score", "traffic_stress",
     "intersection_complexity", "continuity_score",
 })
-
-
-# Gradient is judged over stretches at least this long, so a kerb ramp or a
-# noisy elevation sample does not make a flat park path look like a hill.
-_GRADE_WINDOW_M = 50.0
-# The sustained gradient that counts as fully steep (slope = 1.0). 12% is a
-# hill most people notice; wheelchair ramps are capped at about 8%.
-_FULL_SLOPE_GRADE = 0.12
-
-
-def measure_topography(coordinates: list) -> tuple[float, float] | None:
-    """(normalised slope 0-1, total ascent in metres) for an ORS [lon, lat, ele]
-    line, or None when elevation is missing for any point."""
-    if len(coordinates) < 2 or any(len(point) < 3 for point in coordinates):
-        return None
-    try:
-        elevations = [float(point[2]) for point in coordinates]
-    except (TypeError, ValueError):
-        return None
-    if not all(math.isfinite(e) for e in elevations):
-        return None
-
-    cumulative = [0.0]
-    for a, b in zip(coordinates, coordinates[1:]):
-        cumulative.append(cumulative[-1] + _metres_between((a[1], a[0]), (b[1], b[0])))
-    if cumulative[-1] <= 0:
-        return None
-
-    ascent = sum(max(0.0, b - a) for a, b in zip(elevations, elevations[1:]))
-
-    window = min(_GRADE_WINDOW_M, cumulative[-1])
-    steepest = 0.0
-    j = 0
-    for i in range(len(coordinates)):
-        j = max(j, i + 1)
-        while j < len(coordinates) and cumulative[j] - cumulative[i] < window:
-            j += 1
-        if j >= len(coordinates):
-            break
-        run = cumulative[j] - cumulative[i]
-        steepest = max(steepest, abs(elevations[j] - elevations[i]) / run)
-
-    return min(1.0, steepest / _FULL_SLOPE_GRADE), ascent
 
 
 # ORS "waytype" codes (extra_info=waytype), per the ORS documentation.

@@ -1,0 +1,45 @@
+# Render Blueprint for the FitWaze field pilot.
+#
+# Deploy: in the Render dashboard choose New > Blueprint, pick this GitHub
+# repository and branch, and click Apply. Render creates the database and the
+# app, generates the secrets, and serves the app at https://<name>.onrender.com
+# (HTTPS, so phones can share their location). See docs/DEPLOY.md.
+databases:
+  - name: fitwaze-db
+    plan: free
+    databaseName: fitwaze
+    user: fitwaze
+
+services:
+  - type: web
+    name: fitwaze
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: pilot
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fitwaze-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      # 256-bit random value, base64-encoded: exactly what the AES-256 field
+      # encryption expects. Never change it once data exists.
+      - key: FIELD_ENCRYPTION_KEY
+        generateValue: true
+      - key: ROUTE_PROVIDER
+        value: osrm
+      - key: OSRM_FOOT_URL
+        value: https://routing.openstreetmap.de/routed-foot/route/v1/foot
+      - key: OSRM_BIKE_URL
+        value: https://routing.openstreetmap.de/routed-bike/route/v1/bike
+      - key: ELEVATION_URL
+        value: https://api.opentopodata.org/v1/ned10m
+      # Optional: set in the dashboard to switch to OpenRouteService
+      # (ROUTE_PROVIDER=ors) for measured steps, busy roads and greenery.
+      - key: ORS_API_KEY
+        sync: false

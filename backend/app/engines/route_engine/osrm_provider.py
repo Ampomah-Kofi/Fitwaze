@@ -16,10 +16,12 @@ network, never a straight line through buildings. If the result comes back
 much longer or shorter than wanted (streets are rarely straight), the circle
 is resized once and the request repeated.
 
-OSRM reports geometry, distance and duration only, so the environment
-attributes (steps, gradient, traffic, greenery) stay neutral placeholders and
-are declared unmeasured — the OpenRouteService provider measures those when a
-key is configured.
+OSRM reports geometry, distance and duration only. Hills are measured
+separately: elevations along all candidates are looked up in one request to
+an OpenTopoData-compatible service (USGS 10 m data by default), and the
+steepest sustained gradient and total climb feed the same scoring and
+feasibility rules as OpenRouteService. Steps, traffic and greenery stay
+neutral placeholders, declared unmeasured.
 
 IMPORTANT: like the ORS provider, this has only run against a simulated
 server in development (no outbound network there). Smoke-test it once on a
@@ -33,6 +35,7 @@ import math
 import httpx
 
 from app.config import get_settings
+from app.engines.route_engine.elevation import ElevationClient
 from app.engines.route_engine.base import (
     RawRoute,
     RouteProvider,
@@ -101,10 +104,12 @@ class OSRMRouteProvider(RouteProvider):
         self,
         foot_url: str | None = None,
         bike_url: str | None = None,
+        elevation_url: str | None = None,
         timeout_seconds: float = 10.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         settings = get_settings()
+        self.elevation_url = settings.elevation_url if elevation_url is None else elevation_url
         self.urls = {
             ActivityTypeEnum.walk: (foot_url or settings.osrm_foot_url).rstrip("/"),
             ActivityTypeEnum.cycle: (bike_url or settings.osrm_bike_url).rstrip("/"),
@@ -142,9 +147,22 @@ class OSRMRouteProvider(RouteProvider):
                     continue
                 routes.append(route)
 
+            if routes and self.elevation_url:
+                self._add_topography(ElevationClient(self.elevation_url, client), routes)
+
         if not routes:
             raise OSRMProviderError("The routing server returned no usable routes")
         return routes
+
+    @staticmethod
+    def _add_topography(elevation: ElevationClient, routes: list[RawRoute]) -> None:
+        """Measure each route's hills in place; unmeasured ones stay unverified."""
+        for route, topography in zip(routes, elevation.topography_for([r.geometry for r in routes])):
+            if topography is None:
+                continue
+            route.slope = round(topography[0], 3)
+            route.unknown_attributes = route.unknown_attributes - {"slope"}
+            route.raw_attributes["ascent_m"] = round(topography[1], 1)
 
     def _candidate(self, client, activity_type, lat, lon, label, wanted_m, bearing) -> RawRoute:
         length = wanted_m
