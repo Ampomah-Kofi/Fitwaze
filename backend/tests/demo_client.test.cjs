@@ -397,3 +397,15 @@ test('the greeting follows the time of day', () => {
   app.run('renderGreeting(new Date(2026, 8, 26, 19, 0))');
   assert.equal(app.nodes.get('today-greeting').textContent, 'Good evening');
 });
+
+test('calories are estimated live from weight, time and pace', () => {
+  const app = setup();
+  assert.equal(app.run('estimateCalories("walk", 20, 81.6, 1609.3)'), 95);
+  assert.equal(app.run('estimateCalories("walk", 20, null, 1609.3)'), null);
+  app.run(`recommendation = {activity_type: 'walk', duration_minutes: 20};
+    savedProfile = {weight_kg: 81.6};
+    session = {simulated: true, status: 'selected'};
+    simulationElapsedSeconds = 1200; travelledMetres = 1609.3; renderTrackStats();`);
+  assert.match(app.nodes.get('track-out').innerHTML, /<b>95<\/b><span>calories/);
+  assert.match(app.nodes.get('mini-stats').innerHTML, /95 <span>cal/);
+});

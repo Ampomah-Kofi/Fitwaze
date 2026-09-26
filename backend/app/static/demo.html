@@ -2208,6 +2208,20 @@ function metresBetween(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+// Calories, estimated the same way as the server (backend/app/engines/
+// calories.py): METs from the Compendium of Physical Activities by speed,
+// times body weight and time.
+function metFor(activityType, mph) {
+  const table = activityType === "cycle" ? [[10, 4.0], [12, 6.8], [Infinity, 8.0]] : [[2.5, 2.8], [3.5, 3.5], [Infinity, 4.3]];
+  if (!mph) return table[1][1];
+  return table.find(([below]) => mph < below)[1];
+}
+function estimateCalories(activityType, minutes, weightKg, metres) {
+  if (!weightKg || !minutes || minutes <= 0) return null;
+  const mph = metres > 50 ? (metres / 1609.344) / (minutes / 60) : null;
+  return Math.round(metFor(activityType, mph) * weightKg * minutes / 60);
+}
+
 function renderTrackStats() {
   const seconds = session && session.simulated ? Math.round(simulationElapsedSeconds) : Math.round((Date.now() - trackStartedAt) / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -2219,14 +2233,17 @@ function renderTrackStats() {
     '<div class="stat"><b>' + value + "</b><span>" + caption + "</span></div>";
 
   const percent = Math.round(Math.min(100, target ? (seconds / 60 / target) * 100 : 0));
+  const kcal = estimateCalories(recommendation ? recommendation.activity_type : "walk", seconds / 60,
+    savedProfile && savedProfile.weight_kg, travelledMetres);
   el("track-out").innerHTML =
     stat(minutes + ":" + String(seconds % 60).padStart(2, "0"), (target ? "of " + target + " min" : "time")) +
     stat(distanceText(travelledMetres), UNIT === "mi" ? "miles" : "km") +
-    stat(pace, "min / " + UNIT);
+    stat(kcal === null ? "—" : kcal, "calories");
   el("goal-bar").hidden = false;
   el("goal-bar-fill").style.width = percent + "%";
   el("mini-stats").innerHTML = "<b>" + minutes + ":" + String(seconds % 60).padStart(2, "0") + "</b>" +
-    "<b>" + distanceText(travelledMetres) + " <span>" + UNIT + "</span></b><b>" + percent + "% <span>of goal</span></b>";
+    "<b>" + distanceText(travelledMetres) + " <span>" + UNIT + "</span></b>" +
+    (kcal === null ? "<b>" + percent + "% <span>of goal</span></b>" : "<b>" + kcal + " <span>cal</span></b>");
 }
 
 function onFix(position) {
@@ -2561,7 +2578,8 @@ function recentList(sessions) {
     try { day = when.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); } catch (error) {}
     return '<div class="list-row"><span class="list-icon">' + (item.activity_type === "cycle" ? "🚲" : "🚶") + "</span>" +
       "<span class=\"list-main\"><b>" + (item.activity_type === "cycle" ? "Ride" : "Walk") + "</b><small>" + esc(day) + "</small></span>" +
-      "<span class=\"list-value\">" + esc(item.estimated_minutes) + " min · " + distanceText(item.distance_m) + " " + UNIT + "</span></div>";
+      "<span class=\"list-value\">" + esc(item.estimated_minutes) + " min · " + distanceText(item.distance_m) + " " + UNIT +
+      (typeof item.calories === "number" ? " · " + esc(item.calories) + " cal" : "") + "</span></div>";
   }).join("") + "</div>";
 }
 
@@ -2576,7 +2594,9 @@ async function refreshProgress() {
       stat(progress.sessions_completed, progress.sessions_completed === 1 ? "activity done" : "activities done") +
       stat(distanceText(progress.total_distance_m) + " " + UNIT, "distance covered") +
       stat(progress.total_active_minutes, "active minutes in all") +
-      stat(Math.round(progress.completion_rate * 100) + "%", "of started routes finished");
+      (typeof progress.total_calories === "number"
+        ? stat(progress.total_calories.toLocaleString("en-US"), "calories burned (estimate)")
+        : stat(Math.round(progress.completion_rate * 100) + "%", "of started routes finished"));
     el("recent-out").innerHTML = recentList(progress.recent_sessions || []);
   } catch (error) { toast(error.message, true); }
 }

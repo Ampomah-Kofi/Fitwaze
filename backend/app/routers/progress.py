@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.enums import SessionStatusEnum
+from app.engines.calories import estimate_calories
+from app.models.profile import HealthProfile
 from app.models.session import ActivitySession
 from app.models.user import User
 from app.schemas.progress import ProgressResponse, ProgressSessionSummary
@@ -92,6 +94,13 @@ def get_progress(
         {value.date() for value in completed_at_utc.values()}, now.date()
     )
 
+    profile = db.get(HealthProfile, current_user.id)
+    weight_kg = float(profile.weight_kg) if profile is not None else None
+
+    def calories(s: ActivitySession) -> int | None:
+        return estimate_calories(s.activity_recommendation.activity_type, s.estimated_minutes, weight_kg, s.distance_m)
+
+    burned = [calories(s) for s in completed]
     total = len(sessions)
     return ProgressResponse(
         sessions_selected=total,
@@ -102,6 +111,7 @@ def get_progress(
         total_active_minutes=sum(s.estimated_minutes for s in completed),
         last_7_days_minutes=last_7_days_minutes,
         current_streak_days=streak,
+        total_calories=sum(c for c in burned if c) if weight_kg else None,
         recent_sessions=[
             ProgressSessionSummary(
                 id=s.id,
@@ -111,6 +121,7 @@ def get_progress(
                 status=s.status,
                 created_at=s.created_at,
                 completed_at=s.completed_at,
+                calories=calories(s),
             )
             for s in sessions[:RECENT_SESSION_LIMIT]
         ],

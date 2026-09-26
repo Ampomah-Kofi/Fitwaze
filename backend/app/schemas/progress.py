@@ -24,6 +24,8 @@ class ProgressSessionSummary(BaseModel):
     status: SessionStatusEnum
     created_at: datetime
     completed_at: datetime | None = None
+    # Estimated from METs and the saved body weight; None without a profile.
+    calories: int | None = None
 
 
 class ProgressResponse(BaseModel):
@@ -35,4 +37,5 @@ class ProgressResponse(BaseModel):
     total_active_minutes: int  # completed sessions only
     last_7_days_minutes: int
     current_streak_days: int
+    total_calories: int | None = None
     recent_sessions: list[ProgressSessionSummary]
