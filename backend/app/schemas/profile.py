@@ -36,6 +36,13 @@ class HealthProfileData(BaseModel):
     walking_ability: AbilityEnum
     cycling_ability: AbilityEnum
 
+    # Insulin or a sulfonylurea (e.g. glipizide, glimepiride, glyburide):
+    # the medicines that can make blood sugar fall too low during exercise.
+    takes_glucose_lowering_medication: bool = False
+    # Who to call if something goes wrong on a walk. Optional.
+    emergency_contact_name: str | None = Field(default=None, max_length=80)
+    emergency_contact_phone: str | None = Field(default=None, pattern=r"^\+?[0-9 ().-]{7,20}$")
+
 
 class HealthProfileUpsertRequest(HealthProfileData):
     """Same validated shape as HealthProfileData; used for PUT /profile."""

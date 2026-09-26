@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     # OpenTopoData-compatible elevation service used to measure hills on OSRM
     # routes. Default: USGS 10 m elevation (covers the US, incl. Alabama).
     # Empty disables it, leaving gradient unverified.
+    # Heat check from the US National Weather Service before routes are offered.
+    weather_enabled: bool = Field(default=True, alias="WEATHER_ENABLED")
     elevation_url: str = Field(default="https://api.opentopodata.org/v1/ned10m", alias="ELEVATION_URL")
     # How long generated candidate routes are reused for the same start point.
     # Keeps a live provider inside its free-tier quota and keeps /route/select

@@ -66,6 +66,12 @@ class HealthProfile(Base):
     # Where the person lives, so every route starts and ends at home. A home
     # address is as sensitive as anything here, so it is encrypted too, and it
     # is optional: routes can always start from wherever the person is instead.
+    # Safety details, encrypted like the rest: whether the person takes a
+    # medicine that can cause lows during exercise, and who to call.
+    takes_glucose_lowering_medication: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
+    emergency_contact_name: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
+    emergency_contact_phone: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
+
     home_latitude: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
     home_longitude: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
 
@@ -98,6 +104,9 @@ def apply_profile_data(profile: "HealthProfile", data) -> None:
     profile.mobility_limitations = data.mobility_limitations.value
     profile.walking_ability = data.walking_ability.value
     profile.cycling_ability = data.cycling_ability.value
+    profile.takes_glucose_lowering_medication = "true" if data.takes_glucose_lowering_medication else "false"
+    profile.emergency_contact_name = data.emergency_contact_name or None
+    profile.emergency_contact_phone = data.emergency_contact_phone or None
 
 
 def profile_to_data(profile: "HealthProfile"):
@@ -120,4 +129,7 @@ def profile_to_data(profile: "HealthProfile"):
         mobility_limitations=MobilityLimitationEnum(profile.mobility_limitations),
         walking_ability=AbilityEnum(profile.walking_ability),
         cycling_ability=AbilityEnum(profile.cycling_ability),
+        takes_glucose_lowering_medication=profile.takes_glucose_lowering_medication == "true",
+        emergency_contact_name=profile.emergency_contact_name,
+        emergency_contact_phone=profile.emergency_contact_phone,
     )

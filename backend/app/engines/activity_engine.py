@@ -53,6 +53,10 @@ LOW_NORMAL_BELOW_MMOL_L = 5.6  # 100 mg/dL: fine, but have a snack first
 HIGH_FROM_MMOL_L = 13.9  # 250 mg/dL: keep it short and gentle
 VERY_HIGH_FROM_MMOL_L = 16.7  # 300 mg/dL: skip until it comes down
 
+# People on insulin or a sulfonylurea can go low during or after exercise, so
+# the "have a snack first" band starts higher for them (110 mg/dL).
+MEDS_LOW_NORMAL_BELOW_MMOL_L = 6.1
+
 HIGH_GLUCOSE_MAX_MINUTES = 15
 TIRED_DURATION_FACTOR = 0.75
 
@@ -215,7 +219,9 @@ def _check_in_hold(checkin: DailyCheckIn) -> str | None:
     return None
 
 
-def _apply_check_in(duration_minutes: int, checkin: DailyCheckIn) -> tuple[int, list[str]]:
+def _apply_check_in(
+    duration_minutes: int, checkin: DailyCheckIn, takes_glucose_lowering_medication: bool = False
+) -> tuple[int, list[str]]:
     """Adjust today's duration for how the person is this morning.
 
     Like the other rules, notes describe which band applied and never repeat
@@ -228,8 +234,9 @@ def _apply_check_in(duration_minutes: int, checkin: DailyCheckIn) -> tuple[int, 
         duration_minutes = max(_MIN_DURATION_MINUTES, round(duration_minutes * TIRED_DURATION_FACTOR))
         notes.append("You said you feel tired this morning, so we've shortened today's session.")
 
+    snack_below = MEDS_LOW_NORMAL_BELOW_MMOL_L if takes_glucose_lowering_medication else LOW_NORMAL_BELOW_MMOL_L
     if glucose is not None:
-        if glucose < LOW_NORMAL_BELOW_MMOL_L:
+        if glucose < snack_below:
             notes.append(
                 "Your blood sugar is on the low side for exercise: have a small carbohydrate snack "
                 "before you start and carry fast sugar with you."
@@ -298,8 +305,13 @@ def recommend_activity(
             notes.append(note)
 
     if checkin is not None:
-        duration, checkin_notes = _apply_check_in(duration, checkin)
+        duration, checkin_notes = _apply_check_in(duration, checkin, profile.takes_glucose_lowering_medication)
         notes.extend(checkin_notes)
+    if profile.takes_glucose_lowering_medication:
+        notes.append(
+            "Because you take insulin or a sulfonylurea, carry fast sugar (glucose tablets or "
+            "juice) on every walk, and stop if you feel shaky, sweaty or dizzy."
+        )
 
     rationale = " ".join(notes)
 
@@ -310,3 +322,38 @@ def recommend_activity(
         disclaimer=DISCLAIMER,
         rationale_notes=notes,
     )
+
+
+def after_walk_advice(
+    glucose_mmol_l: float | None, effort: str | None, takes_glucose_lowering_medication: bool = False
+) -> str:
+    """What to tell someone after they finish, from how it felt and their
+    blood sugar afterwards. Like the other rules, it never repeats the reading."""
+    parts: list[str] = []
+    if glucose_mmol_l is not None:
+        if glucose_mmol_l < HYPO_BELOW_MMOL_L:
+            parts.append(
+                "Your blood sugar is low. Take 15 g of fast sugar now (half a glass of juice or "
+                "3-4 glucose tablets), sit down, and recheck in 15 minutes."
+            )
+        elif glucose_mmol_l < LOW_NORMAL_BELOW_MMOL_L or (
+            takes_glucose_lowering_medication and glucose_mmol_l < MEDS_LOW_NORMAL_BELOW_MMOL_L
+        ):
+            parts.append(
+                "Your blood sugar is on the low side after exercise. Have a small snack and "
+                "check again in an hour."
+            )
+        elif glucose_mmol_l >= VERY_HIGH_FROM_MMOL_L:
+            parts.append(
+                "Your blood sugar is high. Drink water, and contact your care team if it stays high."
+            )
+        else:
+            parts.append("Your blood sugar is in a good range after your activity.")
+    if takes_glucose_lowering_medication:
+        parts.append("Lows can happen hours after exercise, so check again before bed.")
+    if effort == "hard":
+        parts.append("It felt hard, so take it easy today. Tell your care team if walks keep feeling this hard.")
+    elif effort == "easy":
+        parts.append("It felt easy: great progress.")
+    parts.append("Well done for getting out today.")
+    return " ".join(parts)

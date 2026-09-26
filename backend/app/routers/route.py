@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.engines.activity_engine import after_walk_advice
+from app.services.weather import heat_check
 from app.engines.route_engine import get_route_provider
 from app.engines.route_engine.base import RawRoute, RouteProviderError
 from app.engines.route_engine.scoring import RouteSelection
@@ -41,6 +43,7 @@ from app.schemas.route import (
     RouteSelectRequest,
     RouteSessionResponse,
     RouteSessionUpdateRequest,
+    WeatherSchema,
 )
 from app.security.deps import get_current_user
 
@@ -140,6 +143,7 @@ def get_route_options(
             ExcludedRouteSchema(label=item.label, reason=item.reason)
             for item in selection.excluded
         ],
+        weather=WeatherSchema(**asdict(weather)) if (weather := heat_check(payload.latitude, payload.longitude)) else None,
     )
 
 
@@ -284,8 +288,17 @@ def update_route_session(
 
     new_status = SessionStatusEnum(payload.status)
     session_row.status = new_status
+    advice = None
     if new_status == SessionStatusEnum.completed:
         session_row.completed_at = datetime.now(timezone.utc)
+        if payload.effort is not None or payload.post_glucose_value is not None:
+            session_row.effort = payload.effort
+            glucose = payload.post_glucose_mmol_l
+            session_row.post_glucose_mmol_l = f"{glucose:.2f}" if glucose is not None else None
+            profile = _profile_for(db, current_user.id)
+            advice = after_walk_advice(
+                glucose, payload.effort, bool(profile and profile.takes_glucose_lowering_medication)
+            )
     db.commit()
     db.refresh(session_row)
 
@@ -296,7 +309,9 @@ def update_route_session(
         new_status.value,
     )
 
-    return RouteSessionResponse.model_validate(session_row)
+    response = RouteSessionResponse.model_validate(session_row)
+    response.after_walk_advice = advice
+    return response
 
 
 def _session_to_gpx(session_row: ActivitySession, activity_type: str) -> str:

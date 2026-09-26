@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import SessionStatusEnum
 
@@ -40,6 +40,15 @@ class RouteOptionSchema(BaseModel):
     geometry: list[tuple[float, float]]  # (lat, lon) points, full precision (not persisted)
 
 
+class WeatherSchema(BaseModel):
+    temperature_f: float
+    relative_humidity: float | None = None
+    heat_index_f: float
+    # ok | caution | extreme_caution | danger | cold
+    level: str
+    advice: str
+
+
 class ExcludedRouteSchema(BaseModel):
     label: str
     reason: str
@@ -57,6 +66,8 @@ class RouteOptionsResponse(BaseModel):
     # Candidates withheld because they are not suitable for this person — shown
     # with their reason rather than dropped silently.
     excluded: list[ExcludedRouteSchema] = []
+    # Heat/cold advice at the start point right now, when available (US only).
+    weather: WeatherSchema | None = None
 
 
 class RouteSelectRequest(BaseModel):
@@ -80,6 +91,9 @@ class RouteSessionResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
     route_geometry: list[tuple[float, float]] | None = None
+    effort: str | None = None
+    # Set on the response to a completion that included an after-walk check-in.
+    after_walk_advice: str | None = None
 
 
 class RouteSessionUpdateRequest(BaseModel):
@@ -88,3 +102,20 @@ class RouteSessionUpdateRequest(BaseModel):
     `offered`/`selected`, and Pydantic rejects anything else with a 422."""
 
     status: Literal["completed", "abandoned"]
+    # Optional after-walk check-in, sent with the completion.
+    effort: Literal["easy", "just_right", "hard"] | None = None
+    post_glucose_value: float | None = Field(default=None, gt=0, le=1000)
+    post_glucose_unit: Literal["mmol/L", "mg/dL"] = "mg/dL"
+
+    @model_validator(mode="after")
+    def _plausible_reading(self) -> "RouteSessionUpdateRequest":
+        mmol = self.post_glucose_mmol_l
+        if mmol is not None and not (1.0 <= mmol <= 35.0):
+            raise ValueError("That blood glucose reading looks out of range. Check the number and the unit.")
+        return self
+
+    @property
+    def post_glucose_mmol_l(self) -> float | None:
+        if self.post_glucose_value is None:
+            return None
+        return self.post_glucose_value / 18.0 if self.post_glucose_unit == "mg/dL" else self.post_glucose_value
