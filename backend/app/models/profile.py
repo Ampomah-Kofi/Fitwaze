@@ -63,6 +63,12 @@ class HealthProfile(Base):
     walking_ability: Mapped[str] = mapped_column(EncryptedString(), nullable=False)
     cycling_ability: Mapped[str] = mapped_column(EncryptedString(), nullable=False)
 
+    # Where the person lives, so every route starts and ends at home. A home
+    # address is as sensitive as anything here, so it is encrypted too, and it
+    # is optional: routes can always start from wherever the person is instead.
+    home_latitude: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
+    home_longitude: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

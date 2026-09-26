@@ -69,6 +69,20 @@ Google Maps is deliberately *not* used here: its terms forbid persisting route
 geometry the way `activity_sessions.route_geometry` does, it has no round-trip
 routing, and even its free tier requires a billing account.
 
+The demo client draws OpenStreetMap data with CARTO's free "Voyager" basemap,
+chosen because its muted colours let the route line and the moving position
+stand out on a phone. It is free for light, non-commercial use with the
+attribution shown on the map; switch the tile URL in `demo.html` to your own
+or a paid tile service before a public launch.
+
+### Saved home
+
+Each person can save a home location (`PUT /profile/home`, encrypted at rest
+like the other health fields). When they ask for a route, the demo starts it
+from home if saved, otherwise from their current position, and fetches routes
+straight away, so every route is a loop around where that person lives and
+brings them back there.
+
 ### Attribution
 
 Routing data derives from OpenStreetMap, licensed under the

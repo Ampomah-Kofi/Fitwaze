@@ -1,5 +1,5 @@
-"""Health profile endpoints: GET/PUT /profile, GET /profile/export,
-DELETE /profile/delete.
+"""Health profile endpoints: GET/PUT /profile, GET/PUT/DELETE /profile/home,
+GET /profile/export, DELETE /profile/delete.
 
 Every handler here is scoped to `current_user.id` from the verified JWT
 (`get_current_user`) — a client can never read or write another user's
@@ -19,7 +19,7 @@ from app.models.profile import HealthProfile, apply_profile_data, profile_to_dat
 from app.models.user import User
 from app.models.activity import ActivityRecommendation
 from app.models.session import ActivitySession
-from app.schemas.profile import HealthProfileResponse, HealthProfileUpsertRequest
+from app.schemas.profile import HealthProfileResponse, HealthProfileUpsertRequest, HomeLocation
 from app.security.deps import get_current_user
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -68,6 +68,57 @@ def upsert_profile(
     return _to_response(profile)
 
 
+def _home_of(profile: HealthProfile | None) -> HomeLocation | None:
+    if profile is None or profile.home_latitude is None or profile.home_longitude is None:
+        return None
+    return HomeLocation(latitude=float(profile.home_latitude), longitude=float(profile.home_longitude))
+
+
+@router.get("/home", response_model=HomeLocation)
+def get_home(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> HomeLocation:
+    home = _home_of(_get_own_profile(db, current_user.id))
+    if home is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No home location saved")
+    return home
+
+
+@router.put("/home", response_model=HomeLocation)
+def set_home(
+    payload: HomeLocation,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> HomeLocation:
+    """Save where this person lives, so their routes start and end there."""
+    profile = _get_own_profile(db, current_user.id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Complete your health profile before saving a home location",
+        )
+    profile.home_latitude = repr(payload.latitude)
+    profile.home_longitude = repr(payload.longitude)
+    db.commit()
+    logger.info("profile_home_saved user_id=%s", current_user.id)
+    return payload
+
+
+@router.delete("/home", status_code=status.HTTP_204_NO_CONTENT)
+def clear_home(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    profile = _get_own_profile(db, current_user.id)
+    if profile is not None:
+        profile.home_latitude = None
+        profile.home_longitude = None
+        db.commit()
+    logger.info("profile_home_cleared user_id=%s", current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/export")
 def export_profile(
     current_user: User = Depends(get_current_user),
@@ -88,6 +139,7 @@ def export_profile(
             "created_at": current_user.created_at.isoformat(),
         },
         "health_profile": _to_response(profile).model_dump(mode="json") if profile else None,
+        "home_location": home.model_dump() if (home := _home_of(profile)) else None,
     }
 
 

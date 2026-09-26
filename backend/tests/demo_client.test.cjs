@@ -189,3 +189,40 @@ test('expired refresh session returns to sign-in while preserving the selected r
   assert(app.nodes.get('screen-auth').classList.contains('active'));
   assert.equal(app.run('session.id'), 'keep-this-route');
 });
+
+test('finding a route near me starts from saved home and fetches routes straight away', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    requests.push({url, body: options && options.body ? JSON.parse(options.body) : null});
+    if (url === '/activity/recommendation') return response({id: 'rec-1', activity_type: 'walk',
+      duration_minutes: 12, rationale: 'Short session', disclaimer: 'Wellness guidance'});
+    return response({options: [], provider: 'mock', excluded: []});
+  });
+  app.run(`homePoint = {latitude: 5.6037, longitude: -0.187};`);
+  await app.nodes.get('btn-recommend').onclick();
+  app.nodes.get('btn-goroute').onclick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.run('JSON.stringify(startPoint)'), JSON.stringify({latitude: 5.6037, longitude: -0.187}));
+  const routeRequest = requests.find(item => item.url === '/route/options');
+  assert(routeRequest, 'routes were requested automatically');
+  assert.equal(routeRequest.body.latitude, 5.6037);
+  assert.equal(app.nodes.get('btn-save-home').hidden, true, 'already home, nothing to save');
+});
+
+test('a new start point can be saved as home', () => {
+  const app = setup();
+  app.run(`setStartPoint(5.61, -0.2, 20, 'Your location');`);
+  assert.equal(app.nodes.get('btn-save-home').hidden, false);
+  assert.equal(app.nodes.get('btn-home').hidden, true);
+});
+
+test('arriving back at the start after most of the route says so', () => {
+  const app = setup();
+  app.nodes.get('back-home').hidden = true;
+  app.run(`session = {status: 'selected', distance_m: 1000,
+    route_geometry: [[5.6037, -0.187], [5.61, -0.187], [5.6037, -0.187]]};
+    travelledMetres = 300; checkBackHome([5.6037, -0.187]);`);
+  assert.equal(app.nodes.get('back-home').hidden, true, 'not after only a third of the route');
+  app.run(`travelledMetres = 900; checkBackHome([5.6038, -0.187]);`);
+  assert.equal(app.nodes.get('back-home').hidden, false);
+});

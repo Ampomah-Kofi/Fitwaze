@@ -347,6 +347,201 @@
      the person just pressed or the result it produced. */
   #status { top: calc(78px + env(safe-area-inset-top)); bottom: auto !important; }
 
+  /* The route screen is about the map: keep what sits above it short. */
+  #screen-route .screen-heading { margin-bottom: 10px; }
+  #screen-route .screen-heading .eyebrow { display: none; }
+  #screen-route .route-context { margin-bottom: 10px; }
+  #screen-route .mobile-route-switch { margin-bottom: 10px; }
+
+  /* --- Map clarity -------------------------------------------------------- */
+  #map { height: clamp(320px, 56dvh, 560px) !important; }
+  .leaflet-container { font: inherit; background: #eef1ea; }
+  .home-pin { width: 38px; height: 38px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg);
+    background: var(--accent); border: 3px solid #fff; box-shadow: 0 4px 12px #0003; display: grid; place-items: center; }
+  .home-pin svg { transform: rotate(45deg); width: 18px; height: 18px; }
+  .me-dot { animation: me-pulse 1.6s ease-out infinite; }
+  @keyframes me-pulse { 0% { stroke-width: 3; stroke-opacity: 1; } 100% { stroke-width: 22; stroke-opacity: 0; } }
+  .location-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .location-actions button { margin: 0; }
+  .location-actions button[hidden] { display: none; }
+  #btn-save-home { margin-top: 8px; }
+  #btn-save-home[hidden] { display: none; }
+
+  /* --- Journey: the map takes the whole screen ----------------------------
+     Once a route is chosen the phone becomes a map: route, position and trail
+     edge to edge, with a compact sheet of controls over the bottom. */
+  #screen-route.is-journey {
+    position: absolute; inset: 0; z-index: 850; padding: 0; margin: 0; max-width: none;
+    background: #eef1ea; animation: none;
+  }
+  #screen-route.is-journey .route-layout { display: block; height: 100%; }
+  #screen-route.is-journey .map-panel { position: absolute; inset: 0; }
+  #screen-route.is-journey #map { height: 100% !important; border: 0; border-radius: 0; margin: 0; }
+  #screen-route.is-journey #session-card {
+    position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom));
+    margin: 0; z-index: 900; padding: 14px 16px 12px; border-radius: 22px;
+    box-shadow: 0 10px 34px #0e231a38; max-height: 62%; overflow-y: auto;
+  }
+  #screen-route.is-journey #route-error { position: absolute; top: 12px; left: 12px; right: 12px; z-index: 900; }
+  #screen-route.is-journey .leaflet-control-zoom { display: none; }
+  #screen-route.is-journey .leaflet-bottom.leaflet-right { top: 0; bottom: auto; right: auto; left: 0; }
+  #screen-route.is-journey .leaflet-control-attribution { border-radius: 0 0 8px 0; font-size: 10px; }
+  .sheet-grip { width: 38px; height: 4px; border-radius: 4px; background: #d3dbd3; margin: -4px auto 10px; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .sheet-head h3 { margin: 0 !important; font-size: 18px !important; }
+  .sheet-head .chips { margin: 0 !important; justify-content: flex-end; }
+  #track-out { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+  #track-out .stat { padding: 8px 10px; border-radius: 12px; animation: none; }
+  #track-out .stat b { font-size: 21px; color: var(--ink); }
+  #track-out .stat span { font-size: 11px; }
+  .goal-bar { height: 6px; border-radius: 6px; background: #e3e9e1; overflow: hidden; margin-bottom: 12px; }
+  .goal-bar[hidden] { display: none; }
+  .goal-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s ease; }
+  .sheet-actions { margin-top: 2px; }
+  .sheet-actions button { margin-bottom: 0; }
+  #track-note { font-size: 12px; margin: 8px 0 0; }
+  #track-note:empty { display: none; }
+  .map-fab {
+    position: absolute; right: 12px; top: 12px; z-index: 880; width: auto; min-height: 44px;
+    padding: 10px 14px; border-radius: 999px; background: #fff; color: var(--accent);
+    border: 1px solid var(--line); box-shadow: 0 4px 14px #0e231a26; font-size: 13px;
+  }
+  .map-fab[hidden] { display: none; }
+  #screen-route:not(.is-journey) .map-fab { display: none; }
+  .back-home { background: #e8f5ee; color: var(--good); border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .back-home[hidden] { display: none; }
+
+  /* ======================================================================
+     Apple-style design layer. Last in the sheet so it wins: iOS grouped
+     backgrounds, the system font, filled and tinted buttons, segmented
+     controls, frosted bars, and a HUD for messages.
+     ====================================================================== */
+  :root {
+    --ink: #1c1c1e; --muted: #6e6e73; --line: #e5e5ea; --bg: #f2f2f7; --card: #ffffff;
+    --accent: #248a3d;          /* iOS green, accessible shade for white text */
+    --accent-tint: #248a3d1f;
+    --blue: #007aff; --good: #248a3d; --warn: #c93400; --bad: #d70015;
+    --fill: #7676801f;          /* iOS tertiary fill */
+    --radius: 14px;
+  }
+  body { background: #e9e9ee; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; letter-spacing: -.01em; }
+  #device { background: var(--bg); }
+  .num, .stat b, .plan-headline b, .option .score, #track-out .stat b { font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif; }
+
+  /* Navigation bar: translucent, hairline separator. */
+  #appbar { background: rgba(249, 249, 249, .82); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: .5px solid rgba(60, 60, 67, .29); padding: max(10px, env(safe-area-inset-top)) 20px 10px; }
+  #appbar h1 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+  .brand-mark { width: 28px; height: 28px; }
+  #appbar .brand-caption { display: none; }
+
+  /* Large titles and section headers. */
+  .screen { padding: 12px 16px 28px; }
+  .screen .screen-heading h2 { font-size: 34px; font-weight: 700; letter-spacing: -.025em; margin: 6px 0 4px; }
+  .screen-heading p { font-size: 15px; color: var(--muted); }
+  .eyebrow { font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); margin-bottom: 2px; }
+  .step-label { font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: uppercase; color: #6d6d72; margin: 22px 16px 7px; }
+
+  /* Inset grouped cards. */
+  .card { border: 0; border-radius: var(--radius); box-shadow: none; padding: 18px 16px; }
+  .activity-panel .card { background: var(--card); border: 0; }
+  .card h3 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  .card p { color: var(--muted); font-size: 15px; line-height: 1.45; }
+  .profile-editor > summary { list-style: none; background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+    font-weight: 400; font-size: 17px; display: flex; justify-content: space-between; align-items: center; }
+  .profile-editor > summary::-webkit-details-marker { display: none; }
+  .profile-editor > summary::after { content: "\203A"; color: #c4c4c7; font-size: 24px; line-height: 1; transition: transform .2s; }
+  .profile-editor[open] > summary { border-radius: var(--radius) var(--radius) 0 0; }
+  .profile-editor[open] > summary::after { transform: rotate(90deg); }
+  .profile-editor[open] > .card { border-radius: 0 0 var(--radius) var(--radius); border-top: .5px solid var(--line); }
+  .section-divider { border-top: .5px solid var(--line); }
+
+  /* Form controls. */
+  label { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+  input, select { background: var(--fill); border: 0; border-radius: 10px; min-height: 44px; font-size: 17px; margin-bottom: 14px; color: var(--ink); }
+  input:focus, select:focus { box-shadow: 0 0 0 3px #007aff40; background: #fff; }
+  select { -webkit-appearance: none; appearance: none; padding-right: 34px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%238e8e93' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center; }
+  .check { background: var(--fill); border: 0; font-size: 15px; }
+
+  /* Buttons: filled, tinted, gray and destructive. */
+  button { border-radius: 12px; min-height: 50px; font-size: 17px; font-weight: 600; letter-spacing: -.01em; box-shadow: none; }
+  button.ghost { background: var(--accent-tint); color: var(--accent); border: 0; }
+  button.quiet { background: var(--fill); color: var(--ink); border: 0; }
+  button.danger { background: #ff3b3018; color: var(--bad); border: 0; }
+  button:not(:disabled):active { transform: scale(.98); opacity: .85; }
+  button:focus-visible { outline: 3px solid #007aff80; outline-offset: 2px; }
+  #btn-locate { background: #007aff1a; color: var(--blue); }
+
+  /* Segmented controls. */
+  .segmented, .mobile-route-switch { background: var(--fill); border-radius: 9px; padding: 2px; gap: 0; }
+  .segmented button, .mobile-route-switch button { background: transparent; border: 0; color: var(--ink); min-height: 36px;
+    font-size: 14px; font-weight: 500; border-radius: 7px; margin: 0; box-shadow: none; }
+  .segmented button[aria-pressed="true"], .mobile-route-switch button[aria-pressed="true"] {
+    background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 3px 8px #0000001f, 0 3px 1px #0000000a; }
+  .segmented button[data-feeling="unwell"][aria-pressed="true"] { background: #fff; color: var(--bad); }
+
+  /* Plan and hold. */
+  .plan { border: 0; background: var(--bg); border-radius: 12px; }
+  .plan-headline b { font-size: 40px; font-weight: 700; color: var(--accent); }
+  .plan.hold { background: #ff3b3012; }
+  .plan.hold h3 { color: var(--bad); }
+  .disclaimer { border-top: .5px solid var(--line); color: var(--muted); font-size: 12px; }
+
+  /* Route cards. */
+  .route-context { background: var(--card); border-radius: 12px; font-size: 15px; color: var(--ink); }
+  .option { border: 0 !important; border-radius: var(--radius); padding: 16px; box-shadow: none; }
+  .option.focused { box-shadow: 0 0 0 2px var(--accent); }
+  .option .name { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .rank-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .option .score { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .option .why { font-size: 14px; color: var(--muted); }
+  .chip { border: 0; border-radius: 6px; background: var(--fill); color: #3a3a3c; font-size: 12px; font-weight: 500; padding: 4px 8px; }
+  .chip.good { background: #34c75924; color: #1f7a35; }
+  .chip.warn { background: #ff950024; color: var(--warn); }
+  .banner { border-radius: 12px; font-size: 13px; }
+  .banner.mock { background: #ff95001a; color: #9a4a00; }
+  .banner.real { background: #34c7591a; color: #1f7a35; }
+  .empty-state { border: 0; background: var(--card); border-radius: var(--radius); color: var(--muted); }
+  #map { border: 0; border-radius: var(--radius); }
+
+  /* Progress tiles, Apple Fitness style. */
+  .stat { border: 0; border-radius: var(--radius); box-shadow: none; }
+  .stat b { font-weight: 700; color: var(--ink); }
+  .stat span { color: var(--muted); }
+
+  /* Tab bar: translucent, tinted icon for the current tab. */
+  #tabs { background: rgba(249, 249, 249, .86); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+    border-top: .5px solid rgba(60, 60, 67, .29); padding: 6px 12px max(8px, env(safe-area-inset-bottom)); gap: 0; }
+  #tabs button { min-height: 0; padding: 4px; font-size: 10px; font-weight: 500; color: #8e8e93; background: none; border-radius: 0; }
+  #tabs button[aria-current="page"] { background: none; color: var(--accent); }
+  #tabs button .glyph svg { width: 26px; height: 26px; }
+
+  /* Messages as an iOS HUD pill. */
+  #status { background: rgba(30, 30, 32, .86); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    border-radius: 14px; font-size: 15px; font-weight: 500; padding: 12px 16px; width: auto; max-width: calc(100% - 32px); }
+  #status.error { background: rgba(215, 0, 21, .92); }
+
+  /* Journey sheet and map controls. */
+  #screen-route.is-journey #session-card { background: rgba(255, 255, 255, .9); -webkit-backdrop-filter: saturate(180%) blur(24px);
+    backdrop-filter: saturate(180%) blur(24px); border-radius: 22px; }
+  #track-out .stat { background: var(--fill); }
+  .map-fab { background: rgba(255, 255, 255, .92); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    color: var(--blue); border: 0; font-weight: 600; }
+  .goal-bar span { background: linear-gradient(90deg, #34c759, #248a3d); }
+  .back-home { background: #34c75924; color: #1f7a35; }
+  .leaflet-control-zoom a { border-radius: 10px !important; }
+  .leaflet-bar { border: 0 !important; box-shadow: 0 2px 10px #0000002a !important; border-radius: 10px !important; }
+
+  /* Welcome: large title over a calm gradient. */
+  .welcome-art { background: linear-gradient(160deg, #1f6b3a 0%, #248a3d 55%, #34c759 130%); border-radius: 22px; }
+  .welcome-art .eyebrow { color: #d9f5de; }
+  .auth-card { border-radius: 22px; }
+  .auth-card h3 { font-size: 28px; }
+  .password-field button { background: transparent; color: var(--blue); min-height: 44px; font-size: 15px; }
+
   /* Someone who has asked their OS for less motion gets none of it. */
   @media (prefers-reduced-motion: reduce) {
     *, *::after { animation: none !important; transition: none !important; }
@@ -407,7 +602,7 @@
       </div>
       <div class="profile-layout">
       <details class="profile-editor" id="profile-editor" open>
-      <summary>01 / Your profile</summary>
+      <summary>Health profile</summary>
       <div class="card">
         <h3>Make it personal</h3>
         <p>Your activity preferences and abilities help shape your recommendations.</p>
@@ -463,7 +658,7 @@
       </div>
       </details>
       <aside class="activity-panel">
-      <div class="step-label">02 / Morning check-in</div>
+      <div class="step-label">Morning check-in</div>
       <div class="card">
         <h3>How are you this morning?</h3>
         <p>A quick check-in shapes today's activity around how you are right now.</p>
@@ -514,9 +709,14 @@
       <div class="route-layout">
       <div class="map-panel">
       <div id="map" aria-label="Route map"></div>
+      <button id="btn-recentre" class="map-fab" hidden>Follow me</button>
       <div class="location-controls">
-      <button id="btn-locate" class="ghost">Use my current location</button>
+      <div class="location-actions">
+        <button id="btn-home" class="ghost" hidden>From home</button>
+        <button id="btn-locate" class="ghost">Current location</button>
+      </div>
       <p class="note" id="start-state">Tap the map, or use your current location, to set a start point.</p>
+      <button id="btn-save-home" class="quiet" hidden>Save this spot as my home</button>
       <details class="session-tools">
         <summary>Enter another starting location</summary>
         <div class="pair">
@@ -534,24 +734,26 @@
       </div>
       </div>
       <div id="session-card" class="card" hidden>
-        <h3>Your session</h3>
-        <div id="session-out"></div>
-        <button id="btn-track">Start activity</button>
+        <div class="sheet-grip" aria-hidden="true"></div>
+        <div class="sheet-head"><h3 id="session-title">Your route</h3><div id="session-out"></div></div>
+        <div id="back-home" class="back-home" role="status" hidden>You're back where you started. Well done! Tap Finish.</div>
         <div id="track-out" class="stats" hidden></div>
-        <button id="btn-recentre" class="quiet" style="margin-top:8px" hidden>Recentre on me</button>
+        <div class="goal-bar" id="goal-bar" hidden><span id="goal-bar-fill"></span></div>
+        <button id="btn-track">Start activity</button>
+        <div class="side-by-side sheet-actions">
+          <button id="btn-complete" class="ghost">Finish</button>
+          <button id="btn-abandon" class="danger">End early</button>
+        </div>
         <p class="note" id="track-note"></p>
         <details class="session-tools">
-        <summary>Route tools</summary>
+        <summary>Use another maps app (optional)</summary>
         <div class="side-by-side" style="margin-top:10px">
           <button id="btn-maps" class="quiet">Open in Maps</button>
-          <button id="btn-gpx" class="quiet">Download GPX</button>
+          <button id="btn-go-home" class="quiet">Directions home</button>
         </div>
+        <button id="btn-gpx" class="quiet">Download GPX</button>
         <p class="note" id="handoff-note"></p>
         </details>
-        <div class="side-by-side" style="margin-top:6px">
-          <button id="btn-complete">Finish</button>
-          <button id="btn-abandon" class="danger">Abandon</button>
-        </div>
       </div>
     </section>
 
@@ -586,10 +788,17 @@ let accessToken = null;
 let signedInUserId = null;
 let recommendation = null;
 let startPoint = null;
+// Where this person lives, if they saved it: routes start and end there.
+let homePoint = null;
+// Set when the person asked for "a route near me", so routes are fetched as
+// soon as the start point is known instead of waiting for another tap.
+let autoFindRoutes = false;
 let session = null;
 const simulatedSessions = [];
 
-const RANK_COLORS = ["#1a7f4b", "#a8620a", "#64717f"];
+// Best route in iOS green, then orange and indigo: distinct on the map and
+// matched by a dot on each route card.
+const RANK_COLORS = ["#248a3d", "#ff9500", "#5856d6"];
 const el = (id) => document.getElementById(id);
 
 let offeredContext = null;
@@ -606,6 +815,17 @@ function mapIsVisible() {
   const screen = el("screen-route");
   return screen.classList.contains("active") &&
     (screen.dataset.panel === "map" || screen.classList.contains("is-journey"));
+}
+// Animate only a map that is on screen and measured: Leaflet cannot fly
+// within a zero-sized container and throws instead. Otherwise just jump.
+function moveMap(latlng, zoom) {
+  if (!map) return;
+  // A container that has just been shown still has its old size in Leaflet's
+  // eyes; measure again before deciding whether it can animate.
+  if (map.invalidateSize) map.invalidateSize();
+  const size = map.getSize ? map.getSize() : { x: 0, y: 0 };
+  if (mapIsVisible() && size.x > 0 && size.y > 0 && map.flyTo) map.flyTo(latlng, zoom, { duration: 0.6 });
+  else if (map.setView) map.setView(latlng, zoom, { animate: false });
 }
 function refreshMapView() {
   if (!map || !mapIsVisible()) return;
@@ -647,10 +867,15 @@ function initMap() {
       "loaded, so the map is unavailable. Everything else still works.</div>";
     return;
   }
-  map = L.map("map").setView([40.7128, -74.006], 14);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  // Only the view before we know where the person is; home or their current
+  // location replaces it straight away.
+  map = L.map("map", { zoomControl: false }).setView([5.6037, -0.187], 13);
+  L.control.zoom({ position: "bottomright" }).addTo(map);
+  // CARTO Voyager: OpenStreetMap data drawn with quieter colours and clear
+  // street names, so a route line and a moving dot stand out on a phone.
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20, subdomains: "abcd",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(map);
   routeLayer = L.layerGroup().addTo(map);
 
@@ -811,6 +1036,7 @@ async function authenticate(path) {
       session = null;
       recommendation = null;
       startPoint = null;
+      homePoint = null;
       simulatedSessions.length = 0;
       renderSimulationProgress();
       invalidateOptions();
@@ -835,6 +1061,7 @@ async function authenticate(path) {
       el("profile-editor").open = true;
       if (error.status !== 404) toast("Signed in, but your saved profile could not be loaded. " + error.message, true);
     }
+    await loadHome();
     el("account-state").textContent = "Signed in as " + data.user.email;
     el("tabs").hidden = false;
     showScreen(session && session.status === "selected" ? "route" : "today");
@@ -918,6 +1145,13 @@ el("btn-recommend").onclick = busy(el("btn-recommend"), async () => {
       showRoutePanel("map");
       showScreen("route");
       if (!startPoint) el("start-state").textContent = "Choose a starting point: tap the map, use your location, or enter coordinates. Then tap Find my routes.";
+      // Routes belong where the person actually is: home if saved, otherwise
+      // their current position. Either way, fetch routes as soon as it is known.
+      if (startPoint) { el("btn-options").onclick(); return; }
+      autoFindRoutes = true;
+      if (homePoint) useHome();
+      else if (navigator.geolocation && window.isSecureContext) el("btn-locate").onclick();
+      else autoFindRoutes = false;
     };
     el("btn-options").disabled = !startPoint;
     revealPlan();
@@ -948,7 +1182,9 @@ function setStartPoint(lat, lon, accuracyMetres, label) {
   if (accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
 
   if (map) {
-    startMarker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
+    startMarker = label === "Home"
+      ? L.marker([lat, lon], { icon: homeIcon(), title: "Home" }).addTo(map)
+      : L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
     if (accuracyMetres) {
       accuracyCircle = L.circle([lat, lon], {
         radius: accuracyMetres, color: "#1f6feb", weight: 1, fillOpacity: 0.08,
@@ -960,7 +1196,62 @@ function setStartPoint(lat, lon, accuracyMetres, label) {
     label + ": " + lat.toFixed(4) + ", " + lon.toFixed(4) +
     (accuracyMetres ? " (accurate to ~" + Math.round(accuracyMetres) + " m)" : "");
   el("btn-options").disabled = !recommendation;
+  renderHomeControls();
+  if (autoFindRoutes && recommendation) {
+    autoFindRoutes = false;
+    el("btn-options").onclick();
+  }
 }
+
+// --- Home -------------------------------------------------------------------
+function homeIcon() {
+  return L.divIcon({
+    className: "", iconSize: [38, 38], iconAnchor: [19, 38],
+    html: '<div class="home-pin"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" ' +
+      'stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg></div>',
+  });
+}
+
+function isHome(point) {
+  return Boolean(homePoint && point && metresBetween([homePoint.latitude, homePoint.longitude],
+    [point.latitude, point.longitude]) < 15);
+}
+
+function renderHomeControls() {
+  el("btn-home").hidden = !homePoint;
+  el("btn-save-home").hidden = !startPoint || isHome(startPoint);
+}
+
+function useHome() {
+  if (!homePoint) return;
+  moveMap([homePoint.latitude, homePoint.longitude], 15);
+  setStartPoint(homePoint.latitude, homePoint.longitude, null, "Home");
+}
+
+async function loadHome() {
+  try {
+    const home = await api("/profile/home");
+    homePoint = { latitude: home.latitude, longitude: home.longitude };
+    if (!startPoint && !(session && session.status === "selected")) useHome();
+  } catch (error) {
+    homePoint = null;
+  }
+  renderHomeControls();
+}
+
+el("btn-home").onclick = () => useHome();
+
+el("btn-save-home").onclick = busy(el("btn-save-home"), async () => {
+  if (!startPoint) return;
+  try {
+    const saved = await api("/profile/home", { method: "PUT", body: startPoint });
+    homePoint = { latitude: saved.latitude, longitude: saved.longitude };
+    if (startMarker && map) { startMarker.remove(); startMarker = L.marker([saved.latitude, saved.longitude], { icon: homeIcon() }).addTo(map); }
+    el("start-state").textContent = "Home saved. Your routes will start and finish here.";
+    renderHomeControls();
+    toast("Home saved.");
+  } catch (error) { toast(error.message, true); }
+});
 
 el("btn-coordinates").onclick = () => {
   const latitude = el("start-latitude").value.trim();
@@ -992,12 +1283,12 @@ el("btn-locate").onclick = () => {
   const button = el("btn-locate");
   button.disabled = true;
   button.textContent = "Locating…";
-  const restore = () => { button.disabled = false; button.textContent = "Use my current location"; };
+  const restore = () => { button.disabled = false; button.textContent = "Current location"; };
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
       const { latitude, longitude, accuracy } = position.coords;
-      if (map) map.flyTo([latitude, longitude], 16, { duration: 0.8 });
+      moveMap([latitude, longitude], 16);
       setStartPoint(latitude, longitude, accuracy, "Your location");
       toast("Located you to about " + Math.round(accuracy) + " m.");
       restore();
@@ -1016,6 +1307,7 @@ el("btn-locate").onclick = () => {
 };
 
 let optionLines = [];
+let optionCasings = [];
 let focusedOptionIndex = 0;
 
 const ROUTE_NAMES = {out_and_back: "There and back", small_loop: "Short loop", large_loop: "Longer loop"};
@@ -1059,8 +1351,14 @@ function drawOptions(options) {
   optionLines = [];
   routeLayer.clearLayers();
   const bounds = [];
+  optionCasings = [];
   options.forEach((option, index) => {
+    // A white casing under each line keeps it readable over busy streets.
+    optionCasings.push(L.polyline(option.geometry, {
+      color: "#fff", weight: index === 0 ? 11 : 8, opacity: 0.9, lineCap: "round", lineJoin: "round",
+    }).addTo(routeLayer));
     const line = L.polyline(option.geometry, {
+      lineCap: "round", lineJoin: "round",
       color: RANK_COLORS[index] || RANK_COLORS[2],
       weight: index === 0 ? 6 : 4,
       opacity: index === 0 ? 0.95 : 0.6,
@@ -1079,6 +1377,11 @@ function drawOptions(options) {
 function focusOption(index) {
   focusedOptionIndex = index;
   optionLines.forEach((line, i) => {
+    const casing = optionCasings[i];
+    if (casing) {
+      casing.setStyle({ weight: i === index ? 12 : 6, opacity: i === index ? 0.95 : 0.3 });
+      if (i === index && casing.bringToFront) casing.bringToFront();
+    }
     line.setStyle({
       weight: i === index ? 7 : 3,
       opacity: i === index ? 1 : 0.25,
@@ -1135,7 +1438,7 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
 
     el("options-out").innerHTML = banner + withheld + unverified + data.options.map((option, index) =>
       '<div class="option" style="border-left-color:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '">' +
-      '<div class="top"><span class="name">' + esc(routeName(option.label)) + "</span>" +
+      '<div class="top"><span class="name"><span class="rank-dot" style="background:' + (RANK_COLORS[index] || RANK_COLORS[2]) + '"></span>' + esc(routeName(option.label)) + "</span>" +
       '<span class="score">' + Math.round(option.score) + "<small>match</small></span></div>" +
       '<div class="chips">' + routeChips(option) + "</div>" +
       '<p class="why">' + esc(option.explanation) + "</p>" +
@@ -1204,7 +1507,8 @@ async function selectRoute(label, simulate = false) {
     if (map) {
       optionLines = [];
       routeLayer.clearLayers();
-      const chosen = L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 6 }).addTo(routeLayer);
+      L.polyline(session.route_geometry, { color: "#fff", weight: 12, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+      const chosen = L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 7, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
       if (chosen.getBounds) setTimeout(() => { map.invalidateSize(); map.fitBounds(chosen.getBounds().pad(0.2)); }, 50);
     }
     toast(simulate ? "Simulation selected. No real activity will be recorded." : "Route selected. Ready when you are.");
@@ -1214,8 +1518,10 @@ async function selectRoute(label, simulate = false) {
 }
 
 function renderSession() {
+  const activity = recommendation ? recommendation.activity_type : "walk";
+  el("session-title").textContent = (session.simulated ? "Practice " : "Your ") + (activity === "cycle" ? "ride" : "walk");
   el("session-out").innerHTML =
-    '<div class="chips" style="margin-bottom:12px"><span class="chip">' + (session.simulated ? "Simulation · " : "") + esc(session.status) + "</span>" +
+    '<div class="chips">' +
     '<span class="chip">' + (session.distance_m / 1000).toFixed(2) + " km</span>" +
     '<span class="chip">' + esc(session.estimated_minutes) + " min</span></div>";
   const terminal = session.status === "completed" || session.status === "abandoned";
@@ -1239,6 +1545,7 @@ async function updateSession(status) {
     }
     stopTracking();
     renderSession();
+    el("back-home").hidden = true;
     el("screen-route").classList.remove("is-journey");
     showRoutePanel("map");
     toast("Session " + status + ".");
@@ -1275,8 +1582,36 @@ function enterJourney() {
   el("app-main").scrollTop = 0;
 }
 
+// Keep the moving dot in the part of the map the sheet does not cover, by
+// centring the map half a sheet-height below it.
+function followPoint(point, duration) {
+  const sheet = el("session-card").offsetHeight || 0;
+  if (map.project && map.unproject && sheet) {
+    const zoom = map.getZoom();
+    const target = map.unproject(map.project(point, zoom).add([0, sheet / 2]), zoom);
+    map.panTo(target, { animate: true, duration });
+  } else {
+    map.panTo(point, { animate: true, duration });
+  }
+}
+
+// Walkers and riders on a loop end where they began. Say so when it happens,
+// so nobody has to work out whether they are done.
+function checkBackHome(point) {
+  if (!session || !session.route_geometry || !point) return;
+  const start = session.route_geometry[0];
+  const done = travelledMetres > session.distance_m * 0.6 && metresBetween(start, point) < 40;
+  if (done && el("back-home").hidden) {
+    el("back-home").hidden = false;
+    toast("You're back where you started. Well done!");
+  }
+}
+
+const TRAIL_STYLE = { color: "#e8590c", weight: 6, opacity: 0.95, lineCap: "round", lineJoin: "round" };
+
 function resetJourney() {
   stopTracking();
+  el("back-home").hidden = true;
   el("screen-route").classList.remove("is-journey");
   trackStartedAt = null;
   simulationElapsedSeconds = 0;
@@ -1321,11 +1656,13 @@ function renderTrackStats() {
   const stat = (value, caption) =>
     '<div class="stat"><b>' + value + "</b><span>" + caption + "</span></div>";
 
+  const percent = Math.round(Math.min(100, target ? (seconds / 60 / target) * 100 : 0));
   el("track-out").innerHTML =
-    stat(minutes + ":" + String(seconds % 60).padStart(2, "0"), (session && session.simulated ? "simulated time" : "elapsed") + (target ? " of " + target + " min" : "")) +
-    stat((travelledMetres / 1000).toFixed(2) + " km", "distance moved") +
-    stat(pace, "pace") +
-    stat(Math.round(Math.min(100, target ? (seconds / 60 / target) * 100 : 0)) + "%", "of target time");
+    stat(minutes + ":" + String(seconds % 60).padStart(2, "0"), (target ? "of " + target + " min" : "time")) +
+    stat((travelledMetres / 1000).toFixed(2), "km") +
+    stat(pace === "—" ? "—" : pace.replace(" min/km", ""), "min / km");
+  el("goal-bar").hidden = false;
+  el("goal-bar-fill").style.width = percent + "%";
 }
 
 function onFix(position) {
@@ -1349,11 +1686,12 @@ function onFix(position) {
       meMarker.setLatLng(point);
     } else {
       meMarker = L.circleMarker(point, {
-        radius: 7, color: "#fff", weight: 2, fillColor: "#1f6feb", fillOpacity: 1,
+        radius: 10, color: "#1f6feb", weight: 3, fillColor: "#1f6feb", fillOpacity: 1, className: "me-dot",
       }).addTo(map);
     }
-    if (followMode) map.panTo(point, { animate: true, duration: 0.5 });
+    if (followMode) followPoint(point, 0.5);
   }
+  checkBackHome(point);
   renderTrackStats();
 }
 
@@ -1391,7 +1729,7 @@ function startTracking() {
   lastFix = null;
   if (travelledLine) travelledLine.remove();
   travelledLine = map
-    ? L.polyline([], { color: "#b4232c", weight: 4, dashArray: "6 6" }).addTo(map)
+    ? L.polyline([], TRAIL_STYLE).addTo(map)
     : { addLatLng() {}, remove() {} };
 
   watchId = navigator.geolocation.watchPosition(
@@ -1406,9 +1744,10 @@ function startTracking() {
   el("track-out").hidden = false;
   el("btn-recentre").hidden = false;
   el("btn-track").textContent = "Stop tracking";
+  if (session.route_geometry) moveMap(session.route_geometry[0], 17);
   el("track-note").textContent =
-    "Following you live. The dashed red line is where you have actually been; " +
-    "positions stay on this device and are never sent to the server.";
+    "Following you live. The orange line is where you have been; the green route " +
+    "brings you back to your start. Your position stays on this phone.";
   renderTrackStats();
   elapsedTimer = setInterval(renderTrackStats, 1000);
   requestWakeLock();
@@ -1436,13 +1775,14 @@ function startSimulation() {
     simulationElapsedSeconds = 0;
     travelledMetres = 0;
     if (travelledLine) travelledLine.remove();
-    travelledLine = map ? L.polyline([geometry[0]], {color: "#a8620a", weight: 4, dashArray: "6 6"}).addTo(map)
+    travelledLine = map ? L.polyline([geometry[0]], TRAIL_STYLE).addTo(map)
       : {addLatLng() {}, remove() {}};
   }
   el("track-out").hidden = false;
   el("btn-recentre").hidden = false;
   el("btn-track").textContent = "Pause simulation";
-  el("track-note").textContent = "SIMULATION · The marker follows your selected route in about 20 seconds. No GPS or real exercise is recorded.";
+  el("track-note").textContent = "Practice run: the blue dot follows the route in about 20 seconds. No GPS or real exercise is recorded.";
+  if (map && map.setView && !simulationTravelled) map.setView(geometry[0], 17);
   renderTrackStats();
   simulationTimer = setInterval(() => {
     const previous = simulationTravelled;
@@ -1460,9 +1800,10 @@ function startSimulation() {
     simulationElapsedSeconds = session.estimated_minutes * 60 * simulationTravelled / total;
     if (map) {
       if (meMarker) meMarker.setLatLng(point);
-      else meMarker = L.circleMarker(point, {radius: 8, color: "#fff", weight: 2, fillColor: "#a8620a", fillOpacity: 1}).addTo(map);
-      if (followMode) map.panTo(point, {animate: true, duration: 0.2});
+      else meMarker = L.circleMarker(point, {radius: 10, color: "#1f6feb", weight: 3, fillColor: "#1f6feb", fillOpacity: 1, className: "me-dot"}).addTo(map);
+      if (followMode) followPoint(point, 0.2);
     }
+    checkBackHome(point);
     renderTrackStats();
     if (simulationTravelled >= total) {
       stopTracking();
@@ -1479,7 +1820,7 @@ el("btn-track").onclick = () => {
 
 el("btn-recentre").onclick = () => {
   followMode = true;
-  if (lastFix && map) map.flyTo(lastFix, 17, { duration: 0.6 });
+  if (lastFix && map) { if (map.setZoom) map.setZoom(17); followPoint(lastFix, 0.4); }
 };
 
 // A backgrounded tab loses its wake lock; take it back when the user returns.
@@ -1551,6 +1892,27 @@ function mapsUrlFor(geometry, activityType) {
           "loop rather than the exact path. Download the GPX for the exact route.",
   };
 }
+
+el("btn-maps").textContent = IS_IOS ? "Open in Apple Maps" : "Open in Google Maps";
+
+// Walking directions back to the start (home, if that is where it began), in
+// the phone's own maps app. Optional: the in-app route is already a loop home.
+function directionsHomeUrl() {
+  const target = homePoint && session && isHome({ latitude: session.route_geometry[0][0], longitude: session.route_geometry[0][1] })
+    ? [homePoint.latitude, homePoint.longitude] : session.route_geometry[0];
+  const coord = (point) => point[0].toFixed(6) + "," + point[1].toFixed(6);
+  const cycling = recommendation && recommendation.activity_type === "cycle";
+  if (IS_IOS) {
+    return "https://maps.apple.com/?daddr=" + coord(target) + "&dirflg=w" + (lastFix ? "&saddr=" + coord(lastFix) : "");
+  }
+  return "https://www.google.com/maps/dir/?api=1&destination=" + coord(target) +
+    "&travelmode=" + (cycling ? "bicycling" : "walking") + (lastFix ? "&origin=" + coord(lastFix) : "");
+}
+
+el("btn-go-home").onclick = () => {
+  if (!session || !session.route_geometry) return;
+  window.open(directionsHomeUrl(), "_blank", "noopener");
+};
 
 el("btn-maps").onclick = () => {
   if (!session || !session.route_geometry) return;

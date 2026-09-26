@@ -44,3 +44,10 @@ class HealthProfileUpsertRequest(HealthProfileData):
 class HealthProfileResponse(HealthProfileData):
     user_id: str
     updated_at: datetime
+
+
+class HomeLocation(BaseModel):
+    """The saved start point for this person's routes: where they live."""
+
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)

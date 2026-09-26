@@ -23,11 +23,15 @@ cardiometabolic conditions. The application does not diagnose or treat condition
 3. Receive today's activity recommendation with a duration and explanation.
 4. Accept the suggested activity or choose walking/cycling for the session.
    A new recommendation remains subject to the saved activity abilities.
-5. Use current location, tap the map, or enter latitude and longitude.
+5. Routes start from the saved home (or current location), and are fetched
+   automatically. Any start point can be saved as home.
 6. Request several candidate round trips approximately matching the duration.
 7. Compare explanations, duration, distance and uncertainty; unsuitable known
    terrain can withhold a route, so fewer candidates may be returned.
-8. Select a route, start the journey, and follow the live GPS marker on the map.
+8. Select a route: the map goes full screen with a control sheet over it.
+   Start the journey and follow the pulsing position dot and the travelled
+   trail; the app says when you are back at the start. Opening the route or
+   directions home in Apple Maps or Google Maps is optional.
 9. Finish or abandon the activity and review progress. Alternatively, choose
    a simulated journey, follow its animated marker and finish into demo progress.
 
