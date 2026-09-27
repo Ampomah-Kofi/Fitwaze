@@ -813,6 +813,20 @@
   .gc-table th, .gc-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
   .gc-table th { color: var(--muted); font-weight: 500; }
 
+
+  /* Walk a route again. */
+  .past-routes { margin-top: 18px; }
+  .past-routes h3 { font-size: 17px; margin: 0 0 10px; }
+  .past-route { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 10px;
+    background: var(--card); border-radius: 16px; }
+  .past-thumb { flex: none; width: 56px; height: 56px; border-radius: 12px; background: var(--fill); }
+  .past-thumb path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+  .past-thumb circle { fill: #0a84ff; stroke: var(--card); stroke-width: 1.5; }
+  .past-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .past-info b { font-size: 15px; color: var(--ink); white-space: nowrap; }
+  .past-info span { font-size: 13px; color: var(--muted); }
+  .past-route button { flex: none; width: auto; min-height: 36px; padding: 0 14px; margin: 0; font-size: 15px; }
+
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
      system dark colours. Only tokens change, plus the few places that
@@ -1155,6 +1169,7 @@
       <div class="route-sidebar">
       <div class="step-label">Your route options</div>
       <div id="options-out"><div class="empty-state"><b>A good route starts with you.</b>Get a recommendation in Today, then set your starting point on the map to find routes.</div></div>
+      <div id="past-out" class="past-routes" hidden></div>
       </div>
       </div>
       <div id="session-card" class="card" hidden>
@@ -1324,6 +1339,9 @@ function invalidateOptions() {
   routeRequestVersion++;
   offeredContext = null;
   el("options-out").innerHTML = '<div class="empty-state"><b>Ready for a fresh route?</b>Choose your start point and tap Find my routes.</div>';
+  el("past-out").hidden = true;
+  el("past-out").innerHTML = "";
+  pastContext = null;
   if (!session || session.status !== "selected") {
     if (routeLayer) routeLayer.clearLayers();
     optionLines = [];
@@ -2113,6 +2131,7 @@ el("btn-options").onclick = busy(el("btn-options"), async () => {
       button.onclick = busy(button, () => selectRoute(button.dataset.simulate, true));
     });
     focusOption(0);
+    loadPastRoutes(context, version);
     if (!data.options.length) {
       el("options-out").innerHTML +=
         '<p class="note">No suitable routes from this start point. Try somewhere ' +
@@ -2152,30 +2171,89 @@ async function selectRoute(label, simulate = false) {
     });
     session.label = label;
     session.weather = context.weather || null;
-    session.turnPoint = turnPointOf(session.route_geometry);
-    el("session-card").hidden = false;
-    resetJourney();
-    invalidateOptions();
-    renderSession();
-    // Go straight to the journey layout: the chosen route on the map with the
-    // Start button right under it, not below the start-point controls.
-    enterJourney();
-    if (map) {
-      optionLines = [];
-      routeLayer.clearLayers();
-      L.polyline(session.route_geometry, { color: "#fff", weight: 12, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
-      const chosen = L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 7, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
-      if (session.turnPoint && L.divIcon) {
-        L.marker(session.turnPoint, {
-          icon: L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 17], html: '<div class="turn-flag">&#8634;</div>' }),
-          title: "Turn back here",
-        }).addTo(routeLayer).bindTooltip(session.label === "out_and_back" ? "Turn back here" : "Halfway: head back from here");
-      }
-      if (chosen.getBounds) setTimeout(() => { map.invalidateSize(); map.fitBounds(chosen.getBounds().pad(0.2)); }, 50);
-    }
-    toast(simulate ? "Simulation selected. No real activity will be recorded." : "Route selected. Ready when you are.");
-    refreshProgress();
+    showChosenRoute(simulate);
   } catch (error) { invalidateOptions(); toast(error.message, true); }
+  finally { selectingRoute = false; }
+}
+
+// The chosen session on the map, in the journey layout, ready to start.
+function showChosenRoute(simulate) {
+  session.turnPoint = turnPointOf(session.route_geometry);
+  el("session-card").hidden = false;
+  resetJourney();
+  invalidateOptions();
+  renderSession();
+  // Go straight to the journey layout: the chosen route on the map with the
+  // Start button right under it, not below the start-point controls.
+  enterJourney();
+  if (map) {
+    optionLines = [];
+    routeLayer.clearLayers();
+    L.polyline(session.route_geometry, { color: "#fff", weight: 12, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+    const chosen = L.polyline(session.route_geometry, { color: RANK_COLORS[0], weight: 7, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+    if (session.turnPoint && L.divIcon) {
+      L.marker(session.turnPoint, {
+        icon: L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 17], html: '<div class="turn-flag">&#8634;</div>' }),
+        title: "Turn back here",
+      }).addTo(routeLayer).bindTooltip(session.label === "out_and_back" ? "Turn back here" : "Halfway: head back from here");
+    }
+    if (chosen.getBounds) setTimeout(() => { map.invalidateSize(); map.fitBounds(chosen.getBounds().pad(0.2)); }, 50);
+  }
+  toast(simulate ? "Simulation selected. No real activity will be recorded." : "Route selected. Ready when you are.");
+  refreshProgress();
+}
+
+// --- Walking a route again ----------------------------------------------------
+// Routes finished before from near this start point, that fit today's plan.
+let pastContext = null;
+
+function routeThumb(geometry) {
+  if (!geometry || geometry.length < 2) return "";
+  const lats = geometry.map((p) => p[0]), lons = geometry.map((p) => p[1]);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  const span = Math.max(maxLat - minLat, (maxLon - minLon) * Math.cos(minLat * Math.PI / 180), 1e-6);
+  const px = (p) => [6 + ((p[1] - minLon) * Math.cos(minLat * Math.PI / 180)) / span * 44, 6 + (maxLat - p[0]) / span * 44];
+  const d = geometry.map((p, i) => (i ? "L" : "M") + px(p).map((v) => v.toFixed(1)).join(" ")).join("");
+  const start = px(geometry[0]);
+  return '<svg class="past-thumb" viewBox="0 0 56 56" aria-hidden="true"><path d="' + d + '"/>' +
+    '<circle cx="' + start[0].toFixed(1) + '" cy="' + start[1].toFixed(1) + '" r="3.5"/></svg>';
+}
+
+async function loadPastRoutes(context, version) {
+  let past;
+  try {
+    past = await api("/route/past", { method: "POST", body: context });
+  } catch (error) { return; }  // optional extra: new routes still work
+  if (version !== routeRequestVersion || !past.length) return;
+  pastContext = {...context, routes: past};
+  const noun = recommendation && recommendation.activity_type === "cycle" ? "ride" : "walk";
+  el("past-out").innerHTML = "<h3>Or " + noun + " one you've done before</h3>" + past.map((route) => {
+    const last = new Date(route.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const felt = { easy: "felt easy", just_right: "felt just right", hard: "felt hard" }[route.effort] || "";
+    return '<div class="past-route">' + routeThumb(route.geometry) +
+      '<div class="past-info"><b>' + distanceText(route.distance_m) + " " + UNIT + " · " + esc(route.estimated_minutes) + " min</b>" +
+      "<span>" + (route.times_done > 1 ? "Done " + route.times_done + " times, last " : "Last done ") + esc(last) +
+      (felt ? " · " + felt : "") + "</span></div>" +
+      '<button class="ghost" data-again="' + esc(route.session_id) + '">' + (noun === "ride" ? "Ride" : "Walk") + " again</button></div>";
+  }).join("");
+  el("past-out").hidden = false;
+  el("past-out").querySelectorAll("[data-again]").forEach((button) => {
+    button.onclick = busy(button, () => repeatRoute(button.dataset.again));
+  });
+}
+
+async function repeatRoute(sessionId) {
+  if (!pastContext) { toast("Find routes again before choosing one.", true); return; }
+  if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity first.", true); return; }
+  const context = pastContext;
+  selectingRoute = true;
+  try {
+    session = await api("/route/repeat", { method: "POST",
+      body: { activity_recommendation_id: context.activity_recommendation_id, session_id: sessionId } });
+    session.label = "repeat";
+    session.weather = (offeredContext && offeredContext.weather) || null;
+    showChosenRoute(false);
+  } catch (error) { toast(error.message, true); }
   finally { selectingRoute = false; }
 }
 

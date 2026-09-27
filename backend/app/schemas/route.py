@@ -79,6 +79,27 @@ class RouteSelectRequest(BaseModel):
     candidate_label: CandidateLabel
 
 
+class PastRoutesRequest(BaseModel):
+    activity_recommendation_id: uuid.UUID
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class PastRouteSchema(BaseModel):
+    session_id: uuid.UUID
+    distance_m: float
+    estimated_minutes: int
+    completed_at: datetime
+    times_done: int
+    effort: str | None = None
+    geometry: list[tuple[float, float]]
+
+
+class RouteRepeatRequest(BaseModel):
+    activity_recommendation_id: uuid.UUID
+    session_id: uuid.UUID
+
+
 class RouteSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

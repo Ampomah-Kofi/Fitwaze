@@ -556,3 +556,26 @@ test('progress shows blood sugar before and after walks, with a list view', () =
   assert.match(html, /<td>160<\/td><td>121<\/td><td>-39<\/td>/);
   assert.match(app.run(`glucoseCard([], null)`), /morning check-in/);
 });
+
+test('routes done before are offered again and can be started', async () => {
+  const calls = [];
+  const past = [{session_id: 'old1', distance_m: 1609, estimated_minutes: 20, completed_at: '2026-09-27T13:00:00Z',
+    times_done: 3, effort: 'just_right', geometry: [[33.5, -86.8], [33.51, -86.8], [33.51, -86.79], [33.5, -86.8]]}];
+  const app = setup(async (url, options) => {
+    calls.push({url, body: options.body ? JSON.parse(options.body) : null});
+    if (url === '/route/past') return response(past);
+    if (url === '/route/repeat') return response({id: 'new1', status: 'selected', distance_m: 1609, estimated_minutes: 20,
+      route_geometry: past[0].geometry});
+    return response({});
+  });
+  app.run(`recommendation = {id: 'r1', activity_type: 'walk'};`);
+  await app.run(`loadPastRoutes({activity_recommendation_id: 'r1', latitude: 33.5, longitude: -86.8}, routeRequestVersion)`);
+  assert.equal(app.nodes.get('past-out').hidden, false);
+  assert.match(app.nodes.get('past-out').innerHTML, /Done 3 times/);
+  assert.match(app.nodes.get('past-out').innerHTML, /Walk again/);
+  await app.run(`repeatRoute('old1')`);
+  const repeat = calls.find((c) => c.url === '/route/repeat');
+  assert.deepEqual({...repeat.body}, {activity_recommendation_id: 'r1', session_id: 'old1'});
+  assert.equal(app.run('session.id'), 'new1');
+  assert.equal(app.nodes.get('session-card').hidden, false);
+});

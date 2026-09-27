@@ -19,6 +19,7 @@ from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -26,7 +27,7 @@ from app.db import get_db
 from app.engines.activity_engine import after_walk_advice
 from app.services.weather import heat_check
 from app.engines.route_engine import get_route_provider
-from app.engines.route_engine.base import RawRoute, RouteProviderError
+from app.engines.route_engine.base import RawRoute, RouteProviderError, _metres_between
 from app.engines.route_engine.scoring import RouteSelection
 from app.engines.route_engine.cache import get_candidate_routes_cached
 from app.engines.route_engine.scoring import RouteScoreResult, feasibility_problem, select_routes
@@ -38,6 +39,9 @@ from app.models.user import User
 from app.schemas.route import (
     AfterWalkCheckIn,
     ExcludedRouteSchema,
+    PastRouteSchema,
+    PastRoutesRequest,
+    RouteRepeatRequest,
     RouteOptionSchema,
     RouteOptionsRequest,
     RouteOptionsResponse,
@@ -257,6 +261,97 @@ def select_route(
         route.label,
     )
 
+    return RouteSessionResponse.model_validate(session_row)
+
+
+# --- Walking a route again ------------------------------------------------------
+# Past routes are offered only near where the person is starting now, and
+# only if they fit in today's plan: if the check-in shortened today (tired,
+# high blood sugar), a longer favourite is not a shortcut around that.
+PAST_ROUTE_START_RADIUS_M = 300.0
+PAST_ROUTE_MINUTES_SLACK = 1.25
+PAST_ROUTE_LIMIT = 3
+PAST_ROUTE_SCAN = 50
+
+
+def _fits_today(session_row: ActivitySession, recommendation: ActivityRecommendation) -> bool:
+    return session_row.estimated_minutes <= recommendation.duration_minutes * PAST_ROUTE_MINUTES_SLACK
+
+
+def _same_route_key(session_row: ActivitySession) -> tuple:
+    # The same loop walked twice has the same stored geometry.
+    geometry = session_row.route_geometry or []
+    return (round(session_row.distance_m / 25), len(geometry), tuple(geometry[len(geometry) // 2]) if geometry else None)
+
+
+@router.post("/past", response_model=list[PastRouteSchema])
+def past_routes(
+    payload: PastRoutesRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PastRouteSchema]:
+    """Routes the caller finished before, starting near this start point,
+    that fit today's plan: newest first, each listed once."""
+    recommendation = _get_own_recommendation(db, payload.activity_recommendation_id, current_user.id)
+    rows = db.scalars(
+        select(ActivitySession)
+        .join(ActivityRecommendation, ActivitySession.activity_recommendation_id == ActivityRecommendation.id)
+        .where(ActivitySession.user_id == current_user.id)
+        .where(ActivitySession.status == SessionStatusEnum.completed)
+        .where(ActivityRecommendation.activity_type == recommendation.activity_type)
+        .order_by(ActivitySession.completed_at.desc())
+        .limit(PAST_ROUTE_SCAN)
+    )
+    start = (payload.latitude, payload.longitude)
+    found: dict[tuple, PastRouteSchema] = {}
+    for row in rows:
+        geometry = row.route_geometry or []
+        if not geometry or _metres_between(start, tuple(geometry[0])) > PAST_ROUTE_START_RADIUS_M:
+            continue
+        key = _same_route_key(row)
+        if key in found:
+            found[key].times_done += 1
+            continue
+        if not _fits_today(row, recommendation) or len(found) >= PAST_ROUTE_LIMIT:
+            continue
+        found[key] = PastRouteSchema(
+            session_id=row.id, distance_m=row.distance_m, estimated_minutes=row.estimated_minutes,
+            completed_at=row.completed_at, times_done=1, effort=row.effort,
+            geometry=[(lat, lon) for lat, lon in geometry],
+        )
+    return list(found.values())
+
+
+@router.post("/repeat", response_model=RouteSessionResponse, status_code=status.HTTP_201_CREATED)
+def repeat_route(
+    payload: RouteRepeatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RouteSessionResponse:
+    """Start a route the caller finished before, under today's plan."""
+    recommendation = _get_own_recommendation(db, payload.activity_recommendation_id, current_user.id)
+    past = _get_own_session(db, payload.session_id, current_user.id)
+    if past.status != SessionStatusEnum.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only a route you finished can be walked again")
+    if past.activity_recommendation.activity_type != recommendation.activity_type:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="That route was for a different activity than today's plan")
+    if not _fits_today(past, recommendation):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="That route is longer than today's plan. Choose a shorter one today.")
+    session_row = ActivitySession(
+        user_id=current_user.id,
+        activity_recommendation_id=recommendation.id,
+        distance_m=past.distance_m,
+        estimated_minutes=past.estimated_minutes,
+        score_breakdown=past.score_breakdown,
+        status=SessionStatusEnum.selected,
+        route_geometry=past.route_geometry,
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    logger.info("route_session_repeated user_id=%s session_id=%s from=%s", current_user.id, session_row.id, past.id)
     return RouteSessionResponse.model_validate(session_row)
 
 
