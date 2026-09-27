@@ -92,6 +92,8 @@ class RouteSessionResponse(BaseModel):
     completed_at: datetime | None = None
     route_geometry: list[tuple[float, float]] | None = None
     effort: str | None = None
+    measured_minutes: float | None = None
+    measured_distance_m: float | None = None
     # Set on the response to a completion that included an after-walk check-in.
     after_walk_advice: str | None = None
 
@@ -106,6 +108,9 @@ class RouteSessionUpdateRequest(BaseModel):
     effort: Literal["easy", "just_right", "hard"] | None = None
     post_glucose_value: float | None = Field(default=None, gt=0, le=1000)
     post_glucose_unit: Literal["mmol/L", "mg/dL"] = "mg/dL"
+    # What GPS tracking measured, when the person tracked the walk.
+    measured_minutes: float | None = Field(default=None, gt=0, le=600)
+    measured_distance_m: float | None = Field(default=None, ge=0, le=200_000)
 
     @model_validator(mode="after")
     def _plausible_reading(self) -> "RouteSessionUpdateRequest":

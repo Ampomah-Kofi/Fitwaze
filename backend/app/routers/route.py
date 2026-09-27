@@ -292,6 +292,11 @@ def update_route_session(
     advice = None
     if new_status == SessionStatusEnum.completed:
         session_row.completed_at = datetime.now(timezone.utc)
+        if payload.measured_minutes is not None:
+            session_row.measured_minutes = round(payload.measured_minutes, 1)
+            session_row.measured_distance_m = (
+                round(payload.measured_distance_m, 1) if payload.measured_distance_m is not None else None
+            )
         if payload.effort is not None or payload.post_glucose_value is not None:
             session_row.effort = payload.effort
             glucose = payload.post_glucose_mmol_l

@@ -38,6 +38,10 @@ class ActivitySession(Base):
     # After-walk check-in: how hard it felt, and blood sugar afterwards
     # (mmol/L, encrypted). Both optional.
     effort: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # What the phone measured while tracking, when it did: real minutes and
+    # metres, used instead of the plan's estimates in progress and calories.
+    measured_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
+    measured_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     post_glucose_mmol_l: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
 
     user = relationship("User", backref="activity_sessions")

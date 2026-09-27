@@ -409,3 +409,31 @@ test('calories are estimated live from weight, time and pace', () => {
   assert.match(app.nodes.get('track-out').innerHTML, /<b>95<\/b><span>calories/);
   assert.match(app.nodes.get('mini-stats').innerHTML, /95 <span>cal/);
 });
+
+test('continuing after "Not feeling well?" keeps the time and distance', () => {
+  const app = setup();
+  app.run(`session = {status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8], [33.51, -86.8], [33.5, -86.8]]};
+    window.isSecureContext = true;
+    navigator.geolocation = {watchPosition() {return 7;}, clearWatch() {}};
+    startTracking(); travelledMetres = 420; globalThis.started = trackStartedAt;`);
+  app.nodes.get('btn-unwell').onclick();
+  app.nodes.get('help-better').onclick();
+  assert.equal(app.run('travelledMetres'), 420);
+  assert.equal(app.run('trackStartedAt === globalThis.started'), true);
+});
+
+test('saving a tracked walk sends what the phone measured', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    requests.push(JSON.parse(options.body));
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: []});
+  });
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};
+    trackStartedAt = Date.now() - 14 * 60000; travelledMetres = 1180.4; watchId = 3;
+    navigator.geolocation = {clearWatch() {}};`);
+  await app.nodes.get('btn-complete').onclick();
+  await app.nodes.get('btn-skip-checkin').onclick();
+  assert.equal(requests[0].status, 'completed');
+  assert(Math.abs(requests[0].measured_minutes - 14) < 0.2);
+  assert.equal(requests[0].measured_distance_m, 1180);
+});

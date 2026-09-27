@@ -1885,6 +1885,7 @@ async function updateSession(status, checkin) {
 
 el("btn-complete").onclick = busy(el("btn-complete"), async () => {
   if (session && !session.simulated && session.status === "selected") {
+    if (watchId !== null) trackEndedAt = Date.now();
     stopTracking();
     el("finish-sheet").hidden = false;
     return;
@@ -1892,10 +1893,10 @@ el("btn-complete").onclick = busy(el("btn-complete"), async () => {
   await updateSession("completed");
 });
 el("btn-save-walk").onclick = busy(el("btn-save-walk"), async () => {
-  await updateSession("completed", finishCheckinPayload());
+  await updateSession("completed", { ...finishCheckinPayload(), ...measuredPayload() });
 });
 el("btn-skip-checkin").onclick = busy(el("btn-skip-checkin"), async () => {
-  await updateSession("completed");
+  await updateSession("completed", measuredPayload());
 });
 el("btn-abandon").onclick = busy(el("btn-abandon"), () => updateSession("abandoned"));
 
@@ -1908,6 +1909,7 @@ let watchId = null;
 let wakeLock = null;
 let followMode = true;
 let trackStartedAt = null;
+let trackEndedAt = null;
 let travelledMetres = 0;
 let lastFix = null;
 let meMarker = null;
@@ -2091,7 +2093,7 @@ el("help-go-home").onclick = () => { if (session && session.route_geometry) wind
 el("help-better").onclick = () => {
   el("help-sheet").hidden = true;
   if (session && session.pausedForHelp) {
-    if (session.simulated) startSimulation(); else startTracking();
+    if (session.simulated) startSimulation(); else startTracking(true);
   }
 };
 el("help-end").onclick = busy(el("help-end"), async () => {
@@ -2107,6 +2109,15 @@ document.querySelectorAll("[data-effort]").forEach((button) => {
     document.querySelectorAll("[data-effort]").forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
   };
 });
+
+// What the phone measured, if the walk was tracked: sent with the finish so
+// progress and calories use the real walk rather than the plan.
+function measuredPayload() {
+  if (!session || session.simulated || trackStartedAt === null) return {};
+  const minutes = ((trackEndedAt || Date.now()) - trackStartedAt) / 60000;
+  if (!(minutes > 0.2)) return {};
+  return { measured_minutes: Math.round(minutes * 10) / 10, measured_distance_m: Math.round(travelledMetres) };
+}
 
 function finishCheckinPayload() {
   const reading = el("post-glucose").value.trim();
@@ -2296,7 +2307,9 @@ function stopTracking() {
   el("btn-recentre").hidden = true;
 }
 
-function startTracking() {
+// `resume` continues a walk paused by "Not feeling well?": same clock,
+// distance and trail, rather than starting again from zero.
+function startTracking(resume = false) {
   if (!session || session.status !== "selected") return;
   if (!navigator.geolocation) { toast("This browser has no geolocation support.", true); return; }
   if (!window.isSecureContext) {
@@ -2306,13 +2319,17 @@ function startTracking() {
 
   followMode = true;
   enterJourney();
-  trackStartedAt = Date.now();
-  travelledMetres = 0;
-  lastFix = null;
-  if (travelledLine) travelledLine.remove();
-  travelledLine = map
-    ? L.polyline([], TRAIL_STYLE).addTo(map)
-    : { addLatLng() {}, remove() {} };
+  const resuming = resume && trackStartedAt !== null && travelledLine;
+  if (!resuming) {
+    trackStartedAt = Date.now();
+    travelledMetres = 0;
+    lastFix = null;
+    if (travelledLine) travelledLine.remove();
+    travelledLine = map
+      ? L.polyline([], TRAIL_STYLE).addTo(map)
+      : { addLatLng() {}, remove() {} };
+  }
+  trackEndedAt = null;
 
   watchId = navigator.geolocation.watchPosition(
     onFix,

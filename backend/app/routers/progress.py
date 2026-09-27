@@ -86,7 +86,7 @@ def get_progress(
     }
 
     last_7_days_minutes = sum(
-        s.estimated_minutes
+        round(s.measured_minutes if s.measured_minutes is not None else s.estimated_minutes)
         for s in completed
         if s.id in completed_at_utc and completed_at_utc[s.id] >= week_ago
     )
@@ -97,8 +97,16 @@ def get_progress(
     profile = db.get(HealthProfile, current_user.id)
     weight_kg = float(profile.weight_kg) if profile is not None else None
 
+    # Prefer what the phone measured; fall back to the plan when the walk was
+    # not tracked.
+    def minutes(s: ActivitySession) -> float:
+        return s.measured_minutes if s.measured_minutes is not None else s.estimated_minutes
+
+    def metres(s: ActivitySession) -> float:
+        return s.measured_distance_m if s.measured_distance_m is not None else s.distance_m
+
     def calories(s: ActivitySession) -> int | None:
-        return estimate_calories(s.activity_recommendation.activity_type, s.estimated_minutes, weight_kg, s.distance_m)
+        return estimate_calories(s.activity_recommendation.activity_type, minutes(s), weight_kg, metres(s))
 
     burned = [calories(s) for s in completed]
     total = len(sessions)
@@ -107,8 +115,8 @@ def get_progress(
         sessions_completed=len(completed),
         sessions_abandoned=len(abandoned),
         completion_rate=round(len(completed) / total, 3) if total else 0.0,
-        total_distance_m=round(sum(s.distance_m for s in completed), 1),
-        total_active_minutes=sum(s.estimated_minutes for s in completed),
+        total_distance_m=round(sum(metres(s) for s in completed), 1),
+        total_active_minutes=round(sum(minutes(s) for s in completed)),
         last_7_days_minutes=last_7_days_minutes,
         current_streak_days=streak,
         total_calories=sum(c for c in burned if c) if weight_kg else None,
@@ -116,12 +124,13 @@ def get_progress(
             ProgressSessionSummary(
                 id=s.id,
                 activity_type=s.activity_recommendation.activity_type,
-                distance_m=s.distance_m,
-                estimated_minutes=s.estimated_minutes,
+                distance_m=metres(s),
+                estimated_minutes=round(minutes(s)),
                 status=s.status,
                 created_at=s.created_at,
                 completed_at=s.completed_at,
                 calories=calories(s),
+                measured=s.measured_minutes is not None,
             )
             for s in sessions[:RECENT_SESSION_LIMIT]
         ],

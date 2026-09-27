@@ -26,6 +26,8 @@ class ProgressSessionSummary(BaseModel):
     completed_at: datetime | None = None
     # Estimated from METs and the saved body weight; None without a profile.
     calories: int | None = None
+    # True when minutes/distance are what GPS measured, not the plan.
+    measured: bool = False
 
 
 class ProgressResponse(BaseModel):
