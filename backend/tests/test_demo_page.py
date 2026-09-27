@@ -1,6 +1,8 @@
 """Tests for the demo client route."""
 from __future__ import annotations
 
+import re
+
 import app.main as main
 import pytest
 
@@ -24,8 +26,10 @@ def test_demo_page_does_not_persist_credentials_in_the_browser(client):
     Nothing may write credentials into browser storage, where they would
     outlive the session and be readable by anything else on this origin."""
     page = client.get("/demo").text
-    for persistent_store in ("localStorage.setItem", "sessionStorage.setItem", "document.cookie ="):
+    for persistent_store in ("sessionStorage.setItem", "document.cookie =", "localStorage["):
         assert persistent_store not in page
+    # The one thing kept on the device is the Light/Dark choice.
+    assert re.findall(r"localStorage\.setItem\(([^,]*),", page) == ['"fitwaze-theme"']
 
 
 def test_demo_page_is_served_in_the_hosted_pilot(client, monkeypatch):
