@@ -1,0 +1,19 @@
+{
+  "appId": "org.fitwaze.app",
+  "appName": "FitWaze",
+  "webDir": "www",
+  "server": {
+    "url": "https://REPLACE-WITH-YOUR-SERVER.onrender.com",
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon_config_sample",
+      "iconColor": "#248A3D"
+    }
+  }
+}

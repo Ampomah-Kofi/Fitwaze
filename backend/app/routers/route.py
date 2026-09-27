@@ -19,12 +19,15 @@ from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.engines.activity_engine import after_walk_advice
+from app.services.weather import heat_check
 from app.engines.route_engine import get_route_provider
-from app.engines.route_engine.base import RawRoute, RouteProviderError
+from app.engines.route_engine.base import RawRoute, RouteProviderError, _metres_between
 from app.engines.route_engine.scoring import RouteSelection
 from app.engines.route_engine.cache import get_candidate_routes_cached
 from app.engines.route_engine.scoring import RouteScoreResult, feasibility_problem, select_routes
@@ -34,13 +37,18 @@ from app.models.profile import HealthProfile, profile_to_data
 from app.models.session import ActivitySession
 from app.models.user import User
 from app.schemas.route import (
+    AfterWalkCheckIn,
     ExcludedRouteSchema,
+    PastRouteSchema,
+    PastRoutesRequest,
+    RouteRepeatRequest,
     RouteOptionSchema,
     RouteOptionsRequest,
     RouteOptionsResponse,
     RouteSelectRequest,
     RouteSessionResponse,
     RouteSessionUpdateRequest,
+    WeatherSchema,
 )
 from app.security.deps import get_current_user
 
@@ -51,6 +59,10 @@ logger = logging.getLogger(__name__)
 # precise enough to redraw the route on a map, while deliberately storing a
 # coarser record of where a user actually goes than the provider returns.
 _STORED_COORD_PRECISION = 4
+
+# Measured surroundings a provider may report, passed through to the client.
+_ENVIRONMENT_FACTS = ("ascent_m", "green_pct", "paths_pct", "busy_road_pct", "steps_pct",
+                      "sidewalk_pct", "bike_lane_pct", "lit_pct")
 
 
 def _candidate_revision(route: RawRoute) -> str:
@@ -111,6 +123,10 @@ def get_route_options(
             score_breakdown=result.breakdown,
             explanation=result.explanation,
             unverified=sorted(route.unknown_attributes),
+            environment={
+                key: value for key, value in route.raw_attributes.items()
+                if key in _ENVIRONMENT_FACTS and isinstance(value, (int, float))
+            },
             geometry=route.geometry,
         )
         for route, result in selection.ranked
@@ -133,6 +149,7 @@ def get_route_options(
             ExcludedRouteSchema(label=item.label, reason=item.reason)
             for item in selection.excluded
         ],
+        weather=WeatherSchema(**asdict(weather)) if (weather := heat_check(payload.latitude, payload.longitude)) else None,
     )
 
 
@@ -247,6 +264,97 @@ def select_route(
     return RouteSessionResponse.model_validate(session_row)
 
 
+# --- Walking a route again ------------------------------------------------------
+# Past routes are offered only near where the person is starting now, and
+# only if they fit in today's plan: if the check-in shortened today (tired,
+# high blood sugar), a longer favourite is not a shortcut around that.
+PAST_ROUTE_START_RADIUS_M = 300.0
+PAST_ROUTE_MINUTES_SLACK = 1.25
+PAST_ROUTE_LIMIT = 3
+PAST_ROUTE_SCAN = 50
+
+
+def _fits_today(session_row: ActivitySession, recommendation: ActivityRecommendation) -> bool:
+    return session_row.estimated_minutes <= recommendation.duration_minutes * PAST_ROUTE_MINUTES_SLACK
+
+
+def _same_route_key(session_row: ActivitySession) -> tuple:
+    # The same loop walked twice has the same stored geometry.
+    geometry = session_row.route_geometry or []
+    return (round(session_row.distance_m / 25), len(geometry), tuple(geometry[len(geometry) // 2]) if geometry else None)
+
+
+@router.post("/past", response_model=list[PastRouteSchema])
+def past_routes(
+    payload: PastRoutesRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PastRouteSchema]:
+    """Routes the caller finished before, starting near this start point,
+    that fit today's plan: newest first, each listed once."""
+    recommendation = _get_own_recommendation(db, payload.activity_recommendation_id, current_user.id)
+    rows = db.scalars(
+        select(ActivitySession)
+        .join(ActivityRecommendation, ActivitySession.activity_recommendation_id == ActivityRecommendation.id)
+        .where(ActivitySession.user_id == current_user.id)
+        .where(ActivitySession.status == SessionStatusEnum.completed)
+        .where(ActivityRecommendation.activity_type == recommendation.activity_type)
+        .order_by(ActivitySession.completed_at.desc())
+        .limit(PAST_ROUTE_SCAN)
+    )
+    start = (payload.latitude, payload.longitude)
+    found: dict[tuple, PastRouteSchema] = {}
+    for row in rows:
+        geometry = row.route_geometry or []
+        if not geometry or _metres_between(start, tuple(geometry[0])) > PAST_ROUTE_START_RADIUS_M:
+            continue
+        key = _same_route_key(row)
+        if key in found:
+            found[key].times_done += 1
+            continue
+        if not _fits_today(row, recommendation) or len(found) >= PAST_ROUTE_LIMIT:
+            continue
+        found[key] = PastRouteSchema(
+            session_id=row.id, distance_m=row.distance_m, estimated_minutes=row.estimated_minutes,
+            completed_at=row.completed_at, times_done=1, effort=row.effort,
+            geometry=[(lat, lon) for lat, lon in geometry],
+        )
+    return list(found.values())
+
+
+@router.post("/repeat", response_model=RouteSessionResponse, status_code=status.HTTP_201_CREATED)
+def repeat_route(
+    payload: RouteRepeatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RouteSessionResponse:
+    """Start a route the caller finished before, under today's plan."""
+    recommendation = _get_own_recommendation(db, payload.activity_recommendation_id, current_user.id)
+    past = _get_own_session(db, payload.session_id, current_user.id)
+    if past.status != SessionStatusEnum.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only a route you finished can be walked again")
+    if past.activity_recommendation.activity_type != recommendation.activity_type:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="That route was for a different activity than today's plan")
+    if not _fits_today(past, recommendation):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="That route is longer than today's plan. Choose a shorter one today.")
+    session_row = ActivitySession(
+        user_id=current_user.id,
+        activity_recommendation_id=recommendation.id,
+        distance_m=past.distance_m,
+        estimated_minutes=past.estimated_minutes,
+        score_breakdown=past.score_breakdown,
+        status=SessionStatusEnum.selected,
+        route_geometry=past.route_geometry,
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    logger.info("route_session_repeated user_id=%s session_id=%s from=%s", current_user.id, session_row.id, past.id)
+    return RouteSessionResponse.model_validate(session_row)
+
+
 @router.get("/sessions/{session_id}", response_model=RouteSessionResponse)
 def get_route_session(
     session_id: uuid.UUID,
@@ -256,6 +364,14 @@ def get_route_session(
     return RouteSessionResponse.model_validate(
         _get_own_session(db, session_id, current_user.id)
     )
+
+
+def _record_checkin(db: Session, session_row: ActivitySession, checkin: AfterWalkCheckIn, user_id) -> str:
+    session_row.effort = checkin.effort
+    glucose = checkin.post_glucose_mmol_l
+    session_row.post_glucose_mmol_l = f"{glucose:.2f}" if glucose is not None else None
+    profile = _profile_for(db, user_id)
+    return after_walk_advice(glucose, checkin.effort, bool(profile and profile.takes_glucose_lowering_medication))
 
 
 @router.patch("/sessions/{session_id}", response_model=RouteSessionResponse)
@@ -277,8 +393,16 @@ def update_route_session(
 
     new_status = SessionStatusEnum(payload.status)
     session_row.status = new_status
+    advice = None
     if new_status == SessionStatusEnum.completed:
         session_row.completed_at = datetime.now(timezone.utc)
+        if payload.measured_minutes is not None:
+            session_row.measured_minutes = round(payload.measured_minutes, 1)
+            session_row.measured_distance_m = (
+                round(payload.measured_distance_m, 1) if payload.measured_distance_m is not None else None
+            )
+        if payload.effort is not None or payload.post_glucose_value is not None:
+            advice = _record_checkin(db, session_row, payload, current_user.id)
     db.commit()
     db.refresh(session_row)
 
@@ -289,7 +413,9 @@ def update_route_session(
         new_status.value,
     )
 
-    return RouteSessionResponse.model_validate(session_row)
+    response = RouteSessionResponse.model_validate(session_row)
+    response.after_walk_advice = advice
+    return response
 
 
 def _session_to_gpx(session_row: ActivitySession, activity_type: str) -> str:
@@ -348,3 +474,29 @@ def download_route_gpx(
             "Content-Disposition": f'attachment; filename="fitwaze-{session_row.id}.gpx"'
         },
     )
+
+
+@router.post("/sessions/{session_id}/checkin", response_model=RouteSessionResponse)
+def add_after_walk_checkin(
+    session_id: uuid.UUID,
+    payload: AfterWalkCheckIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RouteSessionResponse:
+    """Add how it felt and blood sugar afterwards to a walk already saved as
+    completed. The walk is recorded the moment it is finished; this optional
+    step comes after, once, so the record cannot be rewritten later."""
+    session_row = _get_own_session(db, session_id, current_user.id)
+    if session_row.status != SessionStatusEnum.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only a finished walk can have a check-in")
+    if session_row.effort is not None or session_row.post_glucose_mmol_l is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This walk already has a check-in")
+    if payload.effort is None and payload.post_glucose_value is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nothing to add")
+    advice = _record_checkin(db, session_row, payload, current_user.id)
+    db.commit()
+    db.refresh(session_row)
+    logger.info("route_session_checkin user_id=%s session_id=%s", current_user.id, session_row.id)
+    response = RouteSessionResponse.model_validate(session_row)
+    response.after_walk_advice = advice
+    return response

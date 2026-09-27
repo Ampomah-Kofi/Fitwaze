@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FitWaze</string>
+    <string name="title_activity_main">FitWaze</string>
+    <string name="package_name">org.fitwaze.app</string>
+    <string name="custom_url_scheme">org.fitwaze.app</string>
+</resources>

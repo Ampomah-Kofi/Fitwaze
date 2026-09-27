@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import SessionStatusEnum
 
@@ -33,7 +33,20 @@ class RouteOptionSchema(BaseModel):
     # Attributes the provider could not measure for this route, so the caller
     # can say what is known rather than implying every number is surveyed.
     unverified: list[str] = []
+    # Measured facts about the surroundings, present only when the provider
+    # measured them: ascent_m (total climb), green_pct, paths_pct,
+    # busy_road_pct, steps_pct. A missing key means unknown, not zero.
+    environment: dict[str, float] = {}
     geometry: list[tuple[float, float]]  # (lat, lon) points, full precision (not persisted)
+
+
+class WeatherSchema(BaseModel):
+    temperature_f: float
+    relative_humidity: float | None = None
+    heat_index_f: float
+    # ok | caution | extreme_caution | danger | cold
+    level: str
+    advice: str
 
 
 class ExcludedRouteSchema(BaseModel):
@@ -53,6 +66,8 @@ class RouteOptionsResponse(BaseModel):
     # Candidates withheld because they are not suitable for this person — shown
     # with their reason rather than dropped silently.
     excluded: list[ExcludedRouteSchema] = []
+    # Heat/cold advice at the start point right now, when available (US only).
+    weather: WeatherSchema | None = None
 
 
 class RouteSelectRequest(BaseModel):
@@ -62,6 +77,27 @@ class RouteSelectRequest(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     candidate_label: CandidateLabel
+
+
+class PastRoutesRequest(BaseModel):
+    activity_recommendation_id: uuid.UUID
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class PastRouteSchema(BaseModel):
+    session_id: uuid.UUID
+    distance_m: float
+    estimated_minutes: int
+    completed_at: datetime
+    times_done: int
+    effort: str | None = None
+    geometry: list[tuple[float, float]]
+
+
+class RouteRepeatRequest(BaseModel):
+    activity_recommendation_id: uuid.UUID
+    session_id: uuid.UUID
 
 
 class RouteSessionResponse(BaseModel):
@@ -76,11 +112,45 @@ class RouteSessionResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
     route_geometry: list[tuple[float, float]] | None = None
+    effort: str | None = None
+    measured_minutes: float | None = None
+    measured_distance_m: float | None = None
+    # Set on the response to a completion that included an after-walk check-in.
+    after_walk_advice: str | None = None
 
 
-class RouteSessionUpdateRequest(BaseModel):
+class AfterWalkCheckIn(BaseModel):
+    """How the walk felt and blood sugar afterwards: optional, and can be sent
+    with the completion or added to an already completed walk."""
+
+    effort: Literal["easy", "just_right", "hard"] | None = None
+    post_glucose_value: float | None = Field(default=None, gt=0, le=1000)
+    # Required with a reading: guessing the unit could read a dangerous low
+    # (e.g. 30 mg/dL) as a high (30 mmol/L).
+    post_glucose_unit: Literal["mmol/L", "mg/dL"] | None = None
+
+    @model_validator(mode="after")
+    def _plausible_reading(self):
+        if self.post_glucose_value is not None and self.post_glucose_unit is None:
+            raise ValueError("Say whether the blood glucose reading is in mg/dL or mmol/L.")
+        mmol = self.post_glucose_mmol_l
+        if mmol is not None and not (1.0 <= mmol <= 35.0):
+            raise ValueError("That blood glucose reading looks out of range. Check the number and the unit.")
+        return self
+
+    @property
+    def post_glucose_mmol_l(self) -> float | None:
+        if self.post_glucose_value is None:
+            return None
+        return self.post_glucose_value / 18.0 if self.post_glucose_unit == "mg/dL" else self.post_glucose_value
+
+
+class RouteSessionUpdateRequest(AfterWalkCheckIn):
     """Terminal transition for a selected session. Only `completed` and
     `abandoned` are accepted — a client can never move a session back to
     `offered`/`selected`, and Pydantic rejects anything else with a 422."""
 
     status: Literal["completed", "abandoned"]
+    # What GPS tracking measured, when the person tracked the walk.
+    measured_minutes: float | None = Field(default=None, gt=0, le=600)
+    measured_distance_m: float | None = Field(default=None, ge=0, le=200_000)

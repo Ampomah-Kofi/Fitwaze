@@ -14,13 +14,16 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.models.user import User
-from app.schemas.auth import AccessTokenResponse, LoginRequest, RegisterRequest, UserPublic
+from app.models.activity import ActivityRecommendation
+from app.models.profile import HealthProfile
+from app.models.session import ActivitySession
+from app.models.user import RefreshToken, User
+from app.schemas.auth import AccessTokenResponse, DeleteAccountRequest, LoginRequest, RegisterRequest, UserPublic
 from app.security.deps import get_current_user
 from app.security.passwords import hash_password, verify_password
 from app.security.rate_limit import AUTH_RATE_LIMIT, limiter
@@ -46,9 +49,10 @@ _GENERIC_LOGIN_ERROR = "Invalid email or password"
 
 def _cookie_secure() -> bool:
     # Secure cookies require HTTPS transport. We disable the flag outside of
-    # production so local/dev/test HTTP traffic can still exercise the
-    # refresh flow end-to-end; production deployments must terminate TLS.
-    return settings.environment.lower() == "production"
+    # hosted environments so local/dev/test HTTP traffic can still exercise
+    # the refresh flow end-to-end; hosted deployments (the field pilot and
+    # production) always sit behind TLS.
+    return settings.environment.lower() in ("production", "pilot")
 
 
 def _set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
@@ -193,3 +197,31 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
 @router.get("/me", response_model=UserPublic)
 def read_me(current_user: User = Depends(get_current_user)) -> UserPublic:
     return UserPublic.model_validate(current_user)
+
+
+@router.post("/delete-account", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(AUTH_RATE_LIMIT)
+def delete_account(
+    request: Request,
+    payload: DeleteAccountRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Erase the caller's account and everything recorded about them:
+    profile, check-ins, walks and sign-ins. Needs the password again.
+
+    Rows are deleted explicitly, child tables first, rather than relying on
+    ON DELETE CASCADE, which SQLite only honours with a pragma."""
+    if not verify_password(payload.password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That password is not right")
+    user_id = current_user.id
+    db.execute(delete(ActivitySession).where(ActivitySession.user_id == user_id))
+    db.execute(delete(ActivityRecommendation).where(ActivityRecommendation.user_id == user_id))
+    db.execute(delete(HealthProfile).where(HealthProfile.user_id == user_id))
+    db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+    db.execute(delete(User).where(User.id == user_id))
+    db.commit()
+    _clear_refresh_cookie(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response

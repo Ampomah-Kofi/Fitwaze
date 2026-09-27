@@ -167,3 +167,125 @@ def test_ors_accepts_elevation_coordinate_and_rejects_non_finite_distance():
     routes = provider.get_candidate_routes(40.7128, -74.006, ActivityTypeEnum.walk, 30)
     assert len(routes) == 2
     assert routes[0].geometry[0] == (40.7128, -74.006)
+
+
+def _elevated_feature(elevations: list[float]) -> dict:
+    """A round trip heading north ~111 m per point, then back, with the given
+    elevation at each point."""
+    count = len(elevations)
+    half = count // 2
+    lats = [40.0 + 0.001 * i for i in range(half + 1)] + [40.0 + 0.001 * i for i in range(half - 1, -1, -1)]
+    coordinates = [[-74.0, lat, ele] for lat, ele in zip(lats, elevations)]
+    return {
+        "geometry": {"type": "LineString", "coordinates": coordinates},
+        "properties": {"segments": [{"distance": 1100.0, "duration": 780.0}]},
+    }
+
+
+def test_ors_requests_elevation():
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return _ors_response()
+
+    ORSRouteProvider(api_key="k", transport=httpx.MockTransport(handler)).get_candidate_routes(
+        40.7128, -74.006, ActivityTypeEnum.walk, 30
+    )
+    assert json.loads(captured[0].content)["elevation"] is True
+
+
+def test_ors_measures_slope_from_elevation():
+    flat = _elevated_feature([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10])
+    steep = _elevated_feature([10, 25, 40, 55, 70, 85, 70, 55, 40, 25, 10])  # ~13.5% grade
+    no_elevation = _elevated_feature([0] * 11)
+    no_elevation["geometry"]["coordinates"] = [p[:2] for p in no_elevation["geometry"]["coordinates"]]
+    responses = iter([
+        _ors_response(payload={"features": [flat]}),
+        _ors_response(payload={"features": [steep]}),
+        _ors_response(payload={"features": [no_elevation]}),  # slope stays unverified
+    ])
+    provider = ORSRouteProvider(api_key="k", transport=httpx.MockTransport(lambda request: next(responses)))
+    flat_route, steep_route, unknown_route = provider.get_candidate_routes(40.0, -74.0, ActivityTypeEnum.walk, 13)
+
+    assert flat_route.slope == 0.0
+    assert "slope" not in flat_route.unknown_attributes
+    assert flat_route.raw_attributes["ascent_m"] == 0.0
+
+    assert steep_route.slope == 1.0
+    assert steep_route.raw_attributes["ascent_m"] == pytest.approx(75.0)
+
+    assert "slope" in unknown_route.unknown_attributes
+    assert "ascent_m" not in unknown_route.raw_attributes
+
+
+def test_measured_hills_are_withheld_from_someone_who_cannot_manage_them():
+    from app.engines.route_engine.scoring import select_routes
+    from app.models.enums import MobilityLimitationEnum
+    from tests.test_activity_engine import make_profile
+
+    steep = _elevated_feature([10, 25, 40, 55, 70, 85, 70, 55, 40, 25, 10])
+    provider = ORSRouteProvider(
+        api_key="k",
+        transport=httpx.MockTransport(lambda request: _ors_response(payload={"features": [steep]})),
+    )
+    routes = provider.get_candidate_routes(40.0, -74.0, ActivityTypeEnum.walk, 13)
+    selection = select_routes(
+        routes, ActivityTypeEnum.walk, 13, profile=make_profile(mobility_limitations=MobilityLimitationEnum.moderate)
+    )
+    assert selection.ranked == []
+    assert all("steeper" in item.reason for item in selection.excluded)
+
+
+def test_ors_measures_environment_from_extra_info():
+    feature = _elevated_feature([10] * 11)
+    feature["properties"]["extras"] = {
+        "waytypes": {"summary": [
+            {"value": 7.0, "distance": 550.0, "amount": 50.0},   # footway
+            {"value": 2.0, "distance": 330.0, "amount": 30.0},   # road
+            {"value": 8.0, "distance": 22.0, "amount": 2.0},     # steps
+            {"value": 3.0, "distance": 198.0, "amount": 18.0},   # street
+        ]},
+        "green": {"summary": [
+            {"value": 9.0, "distance": 550.0, "amount": 50.0},
+            {"value": 2.0, "distance": 550.0, "amount": 50.0},
+        ]},
+    }
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return _ors_response(payload={"features": [feature]})
+
+    provider = ORSRouteProvider(api_key="k", transport=httpx.MockTransport(handler))
+    route = provider.get_candidate_routes(40.0, -74.0, ActivityTypeEnum.walk, 13)[0]
+
+    assert json.loads(captured[0].content)["extra_info"] == ["waytype", "green"]
+    assert route.traffic_exposure == pytest.approx(0.30)
+    assert route.stairs == pytest.approx(0.20)
+    assert route.trail_bonus == pytest.approx(0.55)  # greenness 5.5/10 beats 50% footway
+    assert {"traffic_exposure", "stairs", "trail_bonus", "slope"}.isdisjoint(route.unknown_attributes)
+    assert "sidewalk_score" in route.unknown_attributes
+    assert route.raw_attributes["green_pct"] == 55.0
+    assert route.raw_attributes["steps_pct"] == 2.0
+
+
+def test_ors_cycling_measures_cycleways_and_busy_roads():
+    feature = _elevated_feature([10] * 11)
+    feature["properties"]["extras"] = {"waytypes": {"summary": [
+        {"value": 6.0, "distance": 600.0, "amount": 60.0},   # cycleway
+        {"value": 1.0, "distance": 400.0, "amount": 40.0},   # state road
+    ]}}
+    provider = ORSRouteProvider(
+        api_key="k", transport=httpx.MockTransport(lambda request: _ors_response(payload={"features": [feature]}))
+    )
+    route = provider.get_candidate_routes(40.0, -74.0, ActivityTypeEnum.cycle, 4)[0]
+    assert route.bike_lane_score == pytest.approx(0.60)
+    assert route.traffic_stress == pytest.approx(0.40)
+    assert "bike_lane_score" not in route.unknown_attributes
+
+
+def test_ors_without_extras_keeps_everything_unverified():
+    provider = ORSRouteProvider(api_key="k", transport=httpx.MockTransport(lambda request: _ors_response()))
+    route = provider.get_candidate_routes(40.7128, -74.006, ActivityTypeEnum.walk, 30)[0]
+    assert "stairs" in route.unknown_attributes and "trail_bonus" in route.unknown_attributes

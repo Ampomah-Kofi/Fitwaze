@@ -33,3 +33,8 @@ class AccessTokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in_minutes: int
     user: UserPublic
+
+
+class DeleteAccountRequest(BaseModel):
+    # The password again, so a phone left unlocked cannot erase an account.
+    password: str = Field(min_length=1, max_length=128)

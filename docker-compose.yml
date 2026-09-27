@@ -26,6 +26,9 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg2://fitwaze:fitwaze@db:5432/fitwaze
+      # Used when the `alabama` profile's routing servers are running.
+      OSRM_FOOT_URL: ${OSRM_FOOT_URL:-http://osrm-foot:5000/route/v1/foot}
+      OSRM_BIKE_URL: ${OSRM_BIKE_URL:-http://osrm-bike:5000/route/v1/bike}
     ports:
       - "8000:8000"
     depends_on:
@@ -36,6 +39,30 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # Self-hosted routing on the free Alabama OpenStreetMap extract: walking
+  # and cycling routes that follow real streets and paths, with no API key
+  # or usage limit. Build the data once with scripts/prepare-alabama-map.sh
+  # (or .ps1 on Windows), then: docker compose --profile alabama up -d
+  osrm-foot:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    profiles: ["alabama"]
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld --max-viaroute-size 50 /data/region.osrm
+    volumes:
+      - ./mapdata/foot:/data:ro
+    ports:
+      - "5001:5000"
+
+  osrm-bike:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    profiles: ["alabama"]
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld --max-viaroute-size 50 /data/region.osrm
+    volumes:
+      - ./mapdata/bike:/data:ro
+    ports:
+      - "5002:5000"
 
 volumes:
   fitwaze_db_data:

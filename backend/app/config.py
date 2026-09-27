@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     )
 
     # --- App ---
+    # "development" (default), "pilot" (hosted field test over HTTPS: secure
+    # cookies, demo app served) or "production" (secure cookies, no demo app).
     environment: str = Field(default="development", alias="ENVIRONMENT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
@@ -46,8 +48,32 @@ class Settings(BaseSettings):
     )
 
     # --- Route engine ---
-    route_provider: str = Field(default="mock", alias="ROUTE_PROVIDER")
+    # "osrm" (default): real street-following routes, no key. "ors": the same
+    # plus measured hills and surroundings, needs ORS_API_KEY. "mock":
+    # synthetic straight-line shapes for offline tests only.
+    route_provider: str = Field(default="osrm", alias="ROUTE_PROVIDER")
     ors_api_key: str = Field(default="", alias="ORS_API_KEY")
+    # OSRM Route service endpoints, one per profile. Defaults are the free
+    # FOSSGIS servers; point them at the self-hosted Alabama servers from
+    # docker-compose (see scripts/prepare-alabama-map.sh) for production use.
+    osrm_foot_url: str = Field(
+        default="https://routing.openstreetmap.de/routed-foot/route/v1/foot", alias="OSRM_FOOT_URL"
+    )
+    osrm_bike_url: str = Field(
+        default="https://routing.openstreetmap.de/routed-bike/route/v1/bike", alias="OSRM_BIKE_URL"
+    )
+    # OpenTopoData-compatible elevation service used to measure hills on OSRM
+    # routes. Default: USGS 10 m elevation (covers the US, incl. Alabama).
+    # Empty disables it, leaving gradient unverified.
+    # Number of reverse proxies in front of the app that append to
+    # X-Forwarded-For (Render: 1). 0 ignores the header. Used for rate limits.
+    trusted_proxy_hops: int = Field(default=0, alias="TRUSTED_PROXY_HOPS")
+    # Overpass API used to read OpenStreetMap street details (sidewalks, speed
+    # limits, bike lanes...) along OSRM routes. Empty disables the check.
+    overpass_url: str = Field(default="https://overpass-api.de/api/interpreter", alias="OVERPASS_URL")
+    # Heat check from the US National Weather Service before routes are offered.
+    weather_enabled: bool = Field(default=True, alias="WEATHER_ENABLED")
+    elevation_url: str = Field(default="https://api.opentopodata.org/v1/ned10m", alias="ELEVATION_URL")
     # How long generated candidate routes are reused for the same start point.
     # Keeps a live provider inside its free-tier quota and keeps /route/select
     # consistent with what /route/options showed. 0 disables caching.

@@ -16,7 +16,7 @@ down_revision: Union[str, None] = "0002"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-activity_type_enum = postgresql.ENUM("walk", "cycle", name="activity_type_enum")
+activity_type_enum = postgresql.ENUM("walk", "cycle", name="activity_type_enum", create_type=False)
 
 
 def upgrade() -> None:

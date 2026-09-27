@@ -1,0 +1,42 @@
+# Render Blueprint for the FitWaze field pilot.
+#
+# Free setup: the app runs on Render's free plan and the database on Neon's
+# free Postgres, which (unlike Render's free database) does not expire.
+# Deploy: create the Neon database first, then in the Render dashboard choose
+# New > Blueprint, pick this repository and branch, paste the Neon connection
+# string when asked for DATABASE_URL, and click Apply. See docs/DEPLOY.md.
+services:
+  - type: web
+    name: fitwaze
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: pilot
+      # Render's proxy appends the caller's address to X-Forwarded-For.
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      # Neon's connection string (postgresql://...neon.tech/...?sslmode=require).
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # 256-bit random value, base64-encoded: exactly what the AES-256 field
+      # encryption expects. Never change it once data exists.
+      - key: FIELD_ENCRYPTION_KEY
+        generateValue: true
+      - key: ROUTE_PROVIDER
+        value: osrm
+      - key: OSRM_FOOT_URL
+        value: https://routing.openstreetmap.de/routed-foot/route/v1/foot
+      - key: OSRM_BIKE_URL
+        value: https://routing.openstreetmap.de/routed-bike/route/v1/bike
+      - key: ELEVATION_URL
+        value: https://api.opentopodata.org/v1/ned10m
+      # Optional: set in the dashboard to switch to OpenRouteService
+      # (ROUTE_PROVIDER=ors) for measured steps, busy roads and greenery.
+      - key: ORS_API_KEY
+        sync: false

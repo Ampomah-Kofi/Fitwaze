@@ -49,3 +49,6 @@ backend/demo-server*.log
 
 # Generated Claude upload bundles
 claude-upload/
+
+# Alabama routing data built by scripts/prepare-alabama-map.*
+mapdata/

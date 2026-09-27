@@ -23,7 +23,7 @@ depends_on: Union[str, Sequence[str], None] = None
 # level to constrain with a CHECK/enum type.
 
 sex_enum = postgresql.ENUM(
-    "male", "female", "other", "prefer_not_to_say", name="sex_enum"
+    "male", "female", "other", "prefer_not_to_say", name="sex_enum", create_type=False
 )
 goal_enum = postgresql.ENUM(
     "general_fitness",
@@ -31,9 +31,10 @@ goal_enum = postgresql.ENUM(
     "manage_prediabetes",
     "manage_type2",
     name="goal_enum",
+    create_type=False,
 )
 preferred_activity_enum = postgresql.ENUM(
-    "walk", "cycle", "no_preference", name="preferred_activity_enum"
+    "walk", "cycle", "no_preference", name="preferred_activity_enum", create_type=False
 )
 
 

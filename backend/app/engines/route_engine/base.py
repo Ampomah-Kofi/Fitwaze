@@ -61,6 +61,11 @@ class RawRoute:
     # nobody measured — "unknown" is not the same as "bad".
     unknown_attributes: frozenset[str] = frozenset()
 
+    # A measured stretch that makes the route unsafe for anyone (e.g. "runs
+    # along a fast road with no sidewalk"). Empty when none was found or the
+    # provider could not check.
+    hazard_reason: str = ""
+
     raw_attributes: dict = field(default_factory=dict)
 
 

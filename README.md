@@ -25,20 +25,35 @@ needs no credit card — which is deliberate, since this build is an MVP/demo.
 
 ### 1. Routing data (backend)
 
-This is what feeds `RouteProvider.get_candidate_routes()`. Two providers ship
-in the repo, selected with the `ROUTE_PROVIDER` environment variable:
+This is what feeds `RouteProvider.get_candidate_routes()`. Three providers
+ship in the repo, selected with the `ROUTE_PROVIDER` environment variable:
 
 | `ROUTE_PROVIDER` | What it does | Cost |
 | --- | --- | --- |
-| `mock` (default) | Deterministic synthetic routes, no network calls, no key | Free, works offline |
-| `ors` | Real routes from OpenRouteService's round-trip Directions API | Free tier, ~2,000 requests/day |
+| `osrm` (default) | Real walking/cycling loops along streets and paths (OSRM on OpenStreetMap). Defaults to the free FOSSGIS servers; self-host for Alabama (below) | Free, no key |
+| `ors` | OpenRouteService round trips, plus measured hills, steps, busy roads and greenery | Free tier, ~2,000 requests/day |
+| `mock` | Synthetic straight-line shapes, no network. Used by the test suite; not for demos | Free, offline |
 
-The `mock` provider is what the test suite exercises and is enough to demo the
-full flow offline. To use real routes:
+Every route starts and ends at the person's home (or current location) and
+follows the street network, so it never cuts through buildings.
 
-1. Sign up for a free key at <https://openrouteservice.org/dev/#/signup> (no
-   payment details required).
-2. Set `ROUTE_PROVIDER=ors` and `ORS_API_KEY=<your key>` in `backend/.env`.
+### Alabama: self-hosted map and routing
+
+The pilot runs in Alabama, so the whole state's OpenStreetMap data (a free
+~100 MB download from Geofabrik) can be routed on locally, with no API key
+and no usage limit:
+
+```bash
+./scripts/prepare-alabama-map.sh          # Windows: .\scripts\prepare-alabama-map.ps1
+docker compose --profile alabama up -d    # starts osrm-foot (:5001) and osrm-bike (:5002)
+```
+
+Then set `ROUTE_PROVIDER=osrm`, `OSRM_FOOT_URL=http://localhost:5001/route/v1/foot`
+and `OSRM_BIKE_URL=http://localhost:5002/route/v1/bike` in `backend/.env`
+(inside `docker compose` the backend is pointed at them automatically).
+Re-run the script now and then for fresher map data. OSRM does not measure
+hills or surroundings; use `ors` for those until elevation data is added to
+the self-hosted stack.
 
 **Quota maths.** One `POST /route/options` costs three ORS requests (one per
 candidate shape), so a 2,000/day budget is roughly 660 route-option requests per
@@ -68,6 +83,20 @@ file. **Nominatim** or **Photon** cover address search for the start point.
 Google Maps is deliberately *not* used here: its terms forbid persisting route
 geometry the way `activity_sessions.route_geometry` does, it has no round-trip
 routing, and even its free tier requires a billing account.
+
+The demo client shows OpenStreetMap's standard map tiles
+(`tile.openstreetmap.org`), which need no API key. The OpenStreetMap tile
+usage policy allows light use such as this pilot; for a public launch switch
+the tile URL in `demo.html` to a commercial tile provider or self-hosted
+tiles.
+
+### Saved home
+
+Each person can save a home location (`PUT /profile/home`, encrypted at rest
+like the other health fields). When they ask for a route, the demo starts it
+from home if saved, otherwise from their current position, and fetches routes
+straight away, so every route is a loop around where that person lives and
+brings them back there.
 
 ### Attribution
 
@@ -116,6 +145,32 @@ open the server's reachable address rather than `localhost`
 The options list states which provider produced the routes, so a synthetic
 `mock` route is never mistaken for a real street. `POST /route/options` returns
 the same information in its `provider` field.
+
+### Everyday features
+
+- **Blood sugar before and after**: the morning check-in reading (encrypted) is
+  paired with the after-walk reading when the walk followed within 4 hours.
+  Progress shows the average change and a before/after chart over the
+  70-180 mg/dL target range; the care-team spreadsheet has both columns.
+- **Walk it again**: past routes starting within 300 m of today's start, same
+  activity, listed once with how often they were done (`POST /route/past`,
+  `POST /route/repeat`). A route longer than today's plan is not offered, so a
+  plan shortened for high blood sugar or tiredness still holds.
+- **Choose how long**: the check-in can ask for 10-60 minutes instead of the
+  suggested length; how the person is this morning can still shorten it.
+- **Saved the moment you finish**: Finish records the walk at once; how it felt
+  and blood sugar afterwards are an optional step after
+  (`POST /route/sessions/{id}/checkin`).
+- **Let someone know**: texts the emergency contact the walk, its start and
+  when to expect the person back.
+- **Low blood sugar 15-15 timer** in "Not feeling well?", with sound and voice.
+- **Achievements**: nine small milestones, each showing how close it is.
+- **Daily reminder** added to the phone's own calendar (`GET /reminder.ics`):
+  no push service or background worker needed.
+- **Español**: the whole app, including server advice and spoken alerts, in
+  Spanish; defaults to the phone's language.
+- **Sign-in**: stays signed in (refresh cookie), Sign out in the top bar,
+  Light/Dark/Auto appearance.
 
 ### Personalised route scoring
 

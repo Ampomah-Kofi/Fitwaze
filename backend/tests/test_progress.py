@@ -82,3 +82,15 @@ def test_progress_recent_sessions_are_capped_and_newest_first(client):
 
 def test_progress_requires_authentication(client):
     assert client.get("/progress").status_code == 401
+
+
+def test_streak_days_follow_the_callers_time_zone():
+    from datetime import date, datetime, timezone
+    from app.routers.progress import _current_streak_days, _zone
+
+    # 8:30 pm in Birmingham on Sept 26 is 01:30 UTC on Sept 27.
+    evening = datetime(2026, 9, 27, 1, 30, tzinfo=timezone.utc)
+    chicago = _zone("America/Chicago")
+    assert evening.astimezone(chicago).date() == date(2026, 9, 26)
+    assert _current_streak_days({evening.astimezone(chicago).date()}, date(2026, 9, 26)) == 1
+    assert _zone("Not/AZone") is timezone.utc and _zone(None) is timezone.utc

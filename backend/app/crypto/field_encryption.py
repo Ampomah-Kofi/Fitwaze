@@ -39,8 +39,15 @@ def load_key(base64_key: str) -> bytes:
         )
     try:
         key = base64.b64decode(base64_key, validate=True)
-    except Exception as exc:  # noqa: BLE001
-        raise FieldEncryptionError("FIELD_ENCRYPTION_KEY is not valid base64") from exc
+    except Exception:  # noqa: BLE001
+        # Hosting platforms may generate the key in the URL-safe base64
+        # alphabet ("-" and "_" instead of "+" and "/"); accept that too.
+        try:
+            key = base64.urlsafe_b64decode(base64_key.encode("ascii"))
+            if base64.urlsafe_b64encode(key).decode("ascii").rstrip("=") != base64_key.rstrip("="):
+                raise ValueError("not canonical")
+        except Exception as exc:  # noqa: BLE001
+            raise FieldEncryptionError("FIELD_ENCRYPTION_KEY is not valid base64") from exc
     if len(key) != KEY_SIZE_BYTES:
         raise FieldEncryptionError(
             f"FIELD_ENCRYPTION_KEY must decode to {KEY_SIZE_BYTES} bytes, got {len(key)}"

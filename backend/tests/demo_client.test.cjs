@@ -189,3 +189,498 @@ test('expired refresh session returns to sign-in while preserving the selected r
   assert(app.nodes.get('screen-auth').classList.contains('active'));
   assert.equal(app.run('session.id'), 'keep-this-route');
 });
+
+test('finding a route near me starts from saved home and fetches routes straight away', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    requests.push({url, body: options && options.body ? JSON.parse(options.body) : null});
+    if (url === '/activity/recommendation') return response({id: 'rec-1', activity_type: 'walk',
+      duration_minutes: 12, rationale: 'Short session', disclaimer: 'Wellness guidance'});
+    return response({options: [], provider: 'mock', excluded: []});
+  });
+  app.run(`homePoint = {latitude: 5.6037, longitude: -0.187};`);
+  await app.nodes.get('btn-recommend').onclick();
+  app.nodes.get('btn-goroute').onclick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.run('JSON.stringify(startPoint)'), JSON.stringify({latitude: 5.6037, longitude: -0.187}));
+  const routeRequest = requests.find(item => item.url === '/route/options');
+  assert(routeRequest, 'routes were requested automatically');
+  assert.equal(routeRequest.body.latitude, 5.6037);
+  assert.equal(app.nodes.get('btn-save-home').hidden, true, 'already home, nothing to save');
+});
+
+test('a new start point can be saved as home', () => {
+  const app = setup();
+  app.run(`setStartPoint(5.61, -0.2, 20, 'Your location');`);
+  assert.equal(app.nodes.get('btn-save-home').hidden, false);
+  assert.equal(app.nodes.get('btn-home').hidden, true);
+});
+
+test('arriving back at the start after most of the route says so', () => {
+  const app = setup();
+  app.nodes.get('back-home').hidden = true;
+  app.run(`session = {status: 'selected', distance_m: 1000,
+    route_geometry: [[5.6037, -0.187], [5.61, -0.187], [5.6037, -0.187]]};
+    travelledMetres = 300; checkBackHome([5.6037, -0.187]);`);
+  assert.equal(app.nodes.get('back-home').hidden, true, 'not after only a third of the route');
+  app.run(`travelledMetres = 900; checkBackHome([5.6038, -0.187]);`);
+  assert.equal(app.nodes.get('back-home').hidden, false);
+});
+
+test('a walk announces its start, the turn-back point and the return', () => {
+  const app = setup();
+  app.nodes.get('journey-alert').hidden = true;
+  app.nodes.get('back-home').hidden = true;
+  app.run(`recommendation = {id: 'rec-1', activity_type: 'walk', duration_minutes: 12};
+    session = {status: 'selected', distance_m: 1000, label: 'out_and_back',
+      route_geometry: [[33.5186, -86.8104], [33.5231, -86.8104], [33.5186, -86.8104]]};
+    announceStart();`);
+  assert.equal(app.nodes.get('journey-alert').hidden, false);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /walk has started/);
+
+  app.run(`travelledMetres = 200; checkTurnaround([33.5200, -86.8104]);`);
+  assert.equal(app.run('session.turnAnnounced'), false, 'not before the turning point');
+  app.run(`travelledMetres = 480; checkTurnaround([33.5230, -86.8104]);`);
+  assert.equal(app.run('session.turnAnnounced'), true);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /Turn back now/);
+
+  app.run(`setSheetHidden(true); travelledMetres = 980; checkBackHome([33.5186, -86.8104]);`);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /back at your start/);
+  assert(!app.nodes.get('session-card').classList.contains('slid-away'), 'Finish is visible again');
+});
+
+test('a loop says to head back at halfway, even when GPS misses the exact spot', () => {
+  const app = setup();
+  app.run(`session = {status: 'selected', distance_m: 1000, label: 'small_loop',
+      route_geometry: [[33.5186, -86.8104], [33.5200, -86.8104], [33.5200, -86.8090], [33.5186, -86.8104]]};
+    travelledMetres = 600; checkTurnaround([33.53, -86.80]);`);
+  assert.match(app.nodes.get('journey-alert-title').textContent, /head back/);
+});
+
+test('the details panel slides away and comes back', () => {
+  const app = setup();
+  app.run(`setSheetHidden(true);`);
+  assert(app.nodes.get('session-card').classList.contains('slid-away'));
+  assert.equal(app.nodes.get('btn-sheet-show').hidden, false);
+  assert.equal(app.nodes.get('mini-stats').hidden, false);
+  app.nodes.get('btn-sheet-show').onclick();
+  assert(!app.nodes.get('session-card').classList.contains('slid-away'));
+  assert.equal(app.nodes.get('mini-stats').hidden, true);
+});
+
+test('sound can be switched off', () => {
+  const app = setup();
+  app.nodes.get('btn-sound').onclick();
+  assert.equal(app.run('soundOn'), false);
+  assert.match(app.nodes.get('btn-sound').textContent, /off/);
+});
+
+test('"Not feeling well?" stops the walk and offers to call the emergency contact', () => {
+  const app = setup();
+  app.nodes.get('help-sheet').hidden = true;
+  app.run(`session = {status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8], [33.51, -86.8], [33.5, -86.8]]};
+    savedProfile = {emergency_contact_name: 'Ama', emergency_contact_phone: '(205) 555-0142'};
+    window.isSecureContext = true;
+    navigator.geolocation = {watchPosition() {return 7;}, clearWatch() {globalThis.cleared = true;}};
+    startTracking();`);
+  app.nodes.get('btn-unwell').onclick();
+  assert.equal(app.nodes.get('help-sheet').hidden, false);
+  assert.equal(app.run('watchId'), null, 'tracking stopped');
+  assert.equal(app.nodes.get('help-call-contact').hidden, false);
+  assert.equal(app.nodes.get('help-call-contact').getAttribute('href'), 'tel:2055550142');
+  assert.match(app.nodes.get('help-call-contact').textContent, /Ama/);
+  app.nodes.get('help-better').onclick();
+  assert.equal(app.nodes.get('help-sheet').hidden, true);
+  assert.equal(app.run('watchId'), 7, 'tracking resumed');
+});
+
+test('finishing a real walk saves it at once, then asks how it felt', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    requests.push({url, method: options.method, body: options.body ? JSON.parse(options.body) : null});
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: [],
+      after_walk_advice: url.endsWith('/checkin') ? 'Your blood sugar is in a good range after your activity.' : null});
+  });
+  app.nodes.get('finish-sheet').hidden = true;
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};`);
+  await app.nodes.get('btn-complete').onclick();
+  const saved = requests.find((r) => r.method === 'PATCH');
+  assert(saved, 'the walk is saved as soon as Finish is tapped');
+  assert.equal(saved.url, '/route/sessions/s1');
+  assert.equal(saved.body.status, 'completed');
+  assert.equal(app.nodes.get('finish-sheet').hidden, false);
+  app.run(`effortChoice = 'hard';`);
+  app.nodes.get('post-glucose').value = '118';
+  app.nodes.get('post-glucose-unit').value = 'mg/dL';
+  await app.nodes.get('btn-save-walk').onclick();
+  const checkin = requests.find((r) => r.url.endsWith('/checkin'));
+  assert.equal(checkin.url, '/route/sessions/s1/checkin');
+  assert.deepEqual({...checkin.body}, {effort: 'hard', post_glucose_unit: 'mg/dL', post_glucose_value: 118});
+  assert.equal(app.nodes.get('finish-sheet').hidden, true);
+  assert.equal(app.nodes.get('after-walk-out').hidden, false);
+  assert.match(app.nodes.get('after-walk-out').innerHTML, /good range/);
+});
+
+test('skipping the after-walk questions keeps the walk saved', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    requests.push({url, method: options.method});
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: []});
+  });
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};`);
+  await app.nodes.get('btn-complete').onclick();
+  const before = requests.filter((r) => r.method === 'PATCH').length;
+  await app.nodes.get('btn-skip-checkin').onclick();
+  assert.equal(before, 1);
+  assert.equal(requests.filter((r) => r.method === 'PATCH').length, 1, 'skip sends nothing more');
+  assert.equal(app.nodes.get('finish-sheet').hidden, true);
+});
+
+test('route options show the heat check', async () => {
+  const app = setup(async () => response({options: [], provider: 'mock', excluded: [],
+    weather: {temperature_f: 96, heat_index_f: 108, level: 'danger', advice: "It's dangerously hot right now."}}));
+  app.run(seed);
+  await app.nodes.get('btn-options').onclick();
+  assert.match(app.nodes.get('options-out').innerHTML, /weather-card danger/);
+  assert.match(app.nodes.get('options-out').innerHTML, /feels like 108/);
+});
+
+test('safety answers are part of the saved profile', () => {
+  const app = setup();
+  app.nodes.get('takes_glucose_lowering_medication').checked = true;
+  app.nodes.get('emergency_contact_phone').value = ' (205) 555-0142 ';
+  const payload = app.run('profilePayload()');
+  assert.equal(payload.takes_glucose_lowering_medication, true);
+  assert.equal(payload.emergency_contact_phone, '(205) 555-0142');
+  assert.equal(payload.emergency_contact_name, null);
+});
+
+test('a server crash shows a plain message, not a JSON parse error', async () => {
+  const app = setup(async () => ({ok: false, status: 500, text: async () => 'Internal Server Error'}));
+  app.run(`recommendation = null;`);
+  await app.nodes.get('btn-recommend').onclick();
+  assert.match(app.nodes.get('status').textContent, /server had a problem \(error 500\)/);
+  assert.doesNotMatch(app.nodes.get('status').textContent, /JSON|Unexpected token/);
+});
+
+test('route cards show measured sidewalks and busy roads', () => {
+  const app = setup();
+  const chips = app.run(`routeChips({distance_m: 1609, estimated_minutes: 20, unverified: [],
+    score_breakdown: {traffic_exposure_inv: 0.7}, environment: {sidewalk_pct: 82, busy_road_pct: 25}})`);
+  assert.match(chips, /Sidewalks 82%/);
+  assert.match(chips, /Busy roads 25%/);
+});
+
+test('height and weight are entered in feet, inches and pounds', () => {
+  const app = setup();
+  app.nodes.get('height_ft').value = '5';
+  app.nodes.get('height_in').value = '7';
+  app.nodes.get('weight_lb').value = '180';
+  const payload = app.run('profilePayload()');
+  assert.equal(payload.height_cm, 170.2);   // 67 in
+  assert.equal(payload.weight_kg, 81.6);    // 180 lb
+  app.run(`showUsUnits({height_cm: 182.9, weight_kg: 95.3})`);
+  assert.equal(app.nodes.get('height_ft').value, '6');
+  assert.equal(app.nodes.get('height_in').value, '0');
+  assert.equal(app.nodes.get('weight_lb').value, '210');
+});
+
+test('Google Maps gets the whole loop, starting and finishing at the start', () => {
+  const app = setup();
+  const url = app.run(`googleLoopUrl([[33.5186, -86.8104], [33.5200, -86.8104], [33.5200, -86.8090], [33.5186, -86.8104]], 'walk')`);
+  const params = new URL(url).searchParams;
+  assert.equal(params.get('origin'), '33.518600,-86.810400');
+  assert.equal(params.get('destination'), '33.518600,-86.810400');
+  assert.equal(params.get('travelmode'), 'walking');
+  assert(params.get('waypoints'));
+});
+
+test('an Apple Maps handoff is reminded to head back at the turn-back point', () => {
+  const app = setup();
+  app.run(`session = {status: 'selected', distance_m: 1000, label: 'small_loop', appleOutLeg: true,
+      route_geometry: [[33.5186, -86.8104], [33.5231, -86.8104], [33.5186, -86.8104]]};
+    travelledMetres = 600; checkTurnaround([33.5230, -86.8104]);`);
+  assert.match(app.nodes.get('journey-alert-text').textContent, /Directions back to my start/);
+});
+
+test('progress shows the weekly ring against 150 minutes', () => {
+  const app = setup();
+  const ring = app.run('weekRing(60, 3)');
+  assert.match(ring, /90 more active minutes/);
+  assert.match(ring, /3 days in a row/);
+  assert.match(app.run('weekRing(160, 0)'), /Weekly goal reached/);
+});
+
+test('the greeting follows the time of day', () => {
+  const app = setup();
+  app.run('renderGreeting(new Date(2026, 8, 26, 7, 30))');
+  assert.equal(app.nodes.get('today-greeting').textContent, 'Good morning');
+  app.run('renderGreeting(new Date(2026, 8, 26, 19, 0))');
+  assert.equal(app.nodes.get('today-greeting').textContent, 'Good evening');
+});
+
+test('calories are estimated live from weight, time and pace', () => {
+  const app = setup();
+  assert.equal(app.run('estimateCalories("walk", 20, 81.6, 1609.3)'), 95);
+  assert.equal(app.run('estimateCalories("walk", 20, null, 1609.3)'), null);
+  app.run(`recommendation = {activity_type: 'walk', duration_minutes: 20};
+    savedProfile = {weight_kg: 81.6};
+    session = {simulated: true, status: 'selected'};
+    simulationElapsedSeconds = 1200; travelledMetres = 1609.3; renderTrackStats();`);
+  assert.match(app.nodes.get('track-out').innerHTML, /<b>95<\/b><span>calories/);
+  assert.match(app.nodes.get('mini-stats').innerHTML, /95 <span>cal/);
+});
+
+test('continuing after "Not feeling well?" keeps the time and distance', () => {
+  const app = setup();
+  app.run(`session = {status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8], [33.51, -86.8], [33.5, -86.8]]};
+    window.isSecureContext = true;
+    navigator.geolocation = {watchPosition() {return 7;}, clearWatch() {}};
+    startTracking(); travelledMetres = 420; globalThis.started = trackStartedAt;`);
+  app.nodes.get('btn-unwell').onclick();
+  app.nodes.get('help-better').onclick();
+  assert.equal(app.run('travelledMetres'), 420);
+  assert.equal(app.run('trackStartedAt === globalThis.started'), true);
+});
+
+test('saving a tracked walk sends what the phone measured', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    if (options.method === 'PATCH') requests.push(JSON.parse(options.body));
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: []});
+  });
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};
+    trackStartedAt = Date.now() - 14 * 60000; travelledMetres = 1180.4; watchId = 3;
+    navigator.geolocation = {clearWatch() {}};`);
+  await app.nodes.get('btn-complete').onclick();
+  await app.nodes.get('btn-skip-checkin').onclick();
+  assert.equal(requests[0].status, 'completed');
+  assert(Math.abs(requests[0].measured_minutes - 14) < 0.2);
+  assert.equal(requests[0].measured_distance_m, 1180);
+});
+
+test('a walk where GPS never moved records time but not a 0-mile distance', () => {
+  const app = setup();
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};
+    trackStartedAt = Date.now() - 10 * 60000; trackEndedAt = Date.now() - 2 * 60000; travelledMetres = 0;`);
+  const measured = app.run('measuredPayload()');
+  assert(Math.abs(measured.measured_minutes - 8) < 0.2, 'time stops when tracking stopped');
+  assert.equal(measured.measured_distance_m, undefined);
+});
+
+test('in the installed app, walks use native background location and alerts notify when away', async () => {
+  const app = setup();
+  app.run(`
+    document.visibilityState = 'visible';
+    globalThis.nativeCalls = [];
+    window.Capacitor = {isNativePlatform: () => true, Plugins: {
+      BackgroundGeolocation: {
+        addWatcher(options, callback) { nativeCalls.push(['addWatcher', options]); globalThis.nativeCallback = callback; return Promise.resolve('w1'); },
+        removeWatcher(args) { nativeCalls.push(['removeWatcher', args]); return Promise.resolve(); },
+      },
+      LocalNotifications: {
+        requestPermissions() { return Promise.resolve({display: 'granted'}); },
+        schedule(args) { nativeCalls.push(['schedule', args]); return Promise.resolve(); },
+      },
+    }};
+    session = {status: 'selected', distance_m: 1000, label: 'small_loop',
+      route_geometry: [[33.5186, -86.8104], [33.5231, -86.8104], [33.5186, -86.8104]]};
+    startTracking();`);
+  assert.equal(app.run('nativeCalls[0][0]'), 'addWatcher');
+  assert.match(app.run('nativeCalls[0][1].backgroundTitle'), /Walk in progress/);
+  await new Promise((resolve) => setImmediate(resolve));
+  app.run(`nativeCallback({latitude: 33.52, longitude: -86.8104, accuracy: 6});`);
+  assert.equal(app.run('JSON.stringify(lastFix)'), JSON.stringify([33.52, -86.8104]));
+  app.run(`document.visibilityState = 'hidden'; travelledMetres = 600; checkTurnaround([33.5231, -86.8104]);`);
+  assert.equal(app.run(`nativeCalls.filter((c) => c[0] === 'schedule').length`), 1);
+  app.run(`stopTracking();`);
+  assert.equal(app.run(`JSON.stringify(nativeCalls[nativeCalls.length - 1])`), JSON.stringify(['removeWatcher', {id: 'w1'}]));
+});
+
+test('sign in and create account share one form, switched at the top', () => {
+  const app = setup();
+  app.run(`setAuthMode('login');`);
+  assert.equal(app.nodes.get('btn-auth').textContent, 'Sign in');
+  app.run(`setAuthMode('register');`);
+  assert.equal(app.nodes.get('btn-auth').textContent, 'Create account');
+  assert.equal(app.nodes.get('password').getAttribute('autocomplete'), 'new-password');
+  assert.equal(app.nodes.get('password-hint').hidden, false);
+  app.run(`setAuthMode('login');`);
+  assert.equal(app.nodes.get('password-hint').hidden, true);
+});
+
+test('sign-in problems are explained on the form, without a network call when obvious', async () => {
+  const calls = [];
+  const app = setup(async (url) => { calls.push(url); return {ok: false, status: 401, text: async () => '{"detail": "Invalid email or password"}'}; });
+  app.nodes.get('email').value = 'not-an-email';
+  app.nodes.get('password').value = 'x';
+  await app.run(`authenticate('login')`);
+  assert.equal(calls.length, 0);
+  assert.match(app.nodes.get('auth-message').textContent, /email address/);
+  app.nodes.get('email').value = 'ama@example.com';
+  app.nodes.get('password').value = 'short';
+  await app.run(`authenticate('register')`);
+  assert.equal(calls.length, 0);
+  assert.match(app.nodes.get('auth-message').textContent, /10 characters/);
+  app.nodes.get('password').value = 'wrong password';
+  await app.run(`authenticate('login')`);
+  assert.equal(calls[0], '/auth/login');
+  assert.equal(app.nodes.get('auth-message').hidden, false);
+  assert.match(app.nodes.get('auth-message').textContent, /don't match/);
+});
+
+test('signing out ends the server session and returns to sign-in', async () => {
+  const calls = [];
+  const app = setup(async (url) => { calls.push(url); return {ok: true, status: 204, text: async () => ''}; });
+  app.run(`accessToken = 'token'; signedInUserId = 'u1'; recommendation = {id: 'r1'};`);
+  app.nodes.get('tabs').hidden = false;
+  app.nodes.get('btn-signout-top').hidden = false;
+  await app.nodes.get('btn-signout-top').onclick();
+  assert.deepEqual(calls, ['/auth/logout']);
+  assert.equal(app.run('accessToken'), null);
+  assert.equal(app.run('recommendation'), null);
+  assert.equal(app.nodes.get('tabs').hidden, true);
+  assert.equal(app.nodes.get('btn-signout-top').hidden, true);
+  assert(app.nodes.get('screen-auth').classList.contains('active'));
+});
+
+test('progress shows blood sugar before and after walks, with a list view', () => {
+  const app = setup();
+  const walks = [
+    {completed_at: '2026-09-26T13:00:00Z', before_mg_dl: 160, after_mg_dl: 121},
+    {completed_at: '2026-09-27T13:00:00Z', before_mg_dl: 140, after_mg_dl: 119},
+  ];
+  const html = app.run(`glucoseCard(${JSON.stringify(walks)}, -30)`);
+  assert.match(html, /30 mg\/dL lower/);
+  assert.equal((html.match(/class="gc-before"/g) || []).length, 2);
+  assert.match(html, /<td>160<\/td><td>121<\/td><td>-39<\/td>/);
+  assert.match(app.run(`glucoseCard([], null)`), /morning check-in/);
+});
+
+test('routes done before are offered again and can be started', async () => {
+  const calls = [];
+  const past = [{session_id: 'old1', distance_m: 1609, estimated_minutes: 20, completed_at: '2026-09-27T13:00:00Z',
+    times_done: 3, effort: 'just_right', geometry: [[33.5, -86.8], [33.51, -86.8], [33.51, -86.79], [33.5, -86.8]]}];
+  const app = setup(async (url, options) => {
+    calls.push({url, body: options.body ? JSON.parse(options.body) : null});
+    if (url === '/route/past') return response(past);
+    if (url === '/route/repeat') return response({id: 'new1', status: 'selected', distance_m: 1609, estimated_minutes: 20,
+      route_geometry: past[0].geometry});
+    return response({});
+  });
+  app.run(`recommendation = {id: 'r1', activity_type: 'walk'};`);
+  await app.run(`loadPastRoutes({activity_recommendation_id: 'r1', latitude: 33.5, longitude: -86.8}, routeRequestVersion)`);
+  assert.equal(app.nodes.get('past-out').hidden, false);
+  assert.match(app.nodes.get('past-out').innerHTML, /Done 3 times/);
+  assert.match(app.nodes.get('past-out').innerHTML, /Walk again/);
+  await app.run(`repeatRoute('old1')`);
+  const repeat = calls.find((c) => c.url === '/route/repeat');
+  assert.deepEqual({...repeat.body}, {activity_recommendation_id: 'r1', session_id: 'old1'});
+  assert.equal(app.run('session.id'), 'new1');
+  assert.equal(app.nodes.get('session-card').hidden, false);
+});
+
+test('let someone know texts the emergency contact the route and return time', async () => {
+  const app = setup();
+  app.run(`savedProfile = {emergency_contact_phone: '(205) 555-0142'};
+    session = {id: 's1', status: 'selected', estimated_minutes: 20, distance_m: 1609,
+      route_geometry: [[33.5186, -86.8104], [33.52, -86.81]]};
+    window.location.href = '';`);
+  await app.nodes.get('btn-tell').onclick();
+  const href = app.run('window.location.href');
+  assert.match(href, /^sms:2055550142\?&body=/);
+  const body = decodeURIComponent(href.split('body=')[1]);
+  assert.match(body, /20-minute walk/);
+  assert.match(body, /back by \d{1,2}:\d{2}/);
+  assert.match(body, /maps\.google\.com\/\?q=33\.51860,-86\.81040/);
+});
+
+test('the 15-15 timer counts down and says when to recheck', () => {
+  const app = setup();
+  app.nodes.get('btn-low-timer').onclick();
+  assert.equal(app.nodes.get('low-timer-out').hidden, false);
+  assert.match(app.nodes.get('low-timer-out').textContent, /Recheck in 1[45]:\d\d/);
+  app.run(`lowTimerEnds = Date.now() - 1; renderLowTimer();`);
+  assert.match(app.nodes.get('low-timer-out').textContent, /Time to recheck/);
+  assert.equal(app.run('lowTimer'), null);
+});
+
+test('achievements show what is earned and how close the rest are', () => {
+  const app = setup();
+  const html = app.run(`badgesCard([
+    {key: 'first_walk', title: 'First step', description: 'Finish your first walk or ride.', earned: true, current: 1, goal: 1},
+    {key: 'miles_10', title: '10 miles', description: 'Cover 10 miles in all.', earned: false, current: 3.4, goal: 10}])`);
+  assert.match(html, /1 of 2/);
+  assert.match(html, /badge earned/);
+  assert.match(html, /3 of 10 mi/);
+  assert.match(html, /width:34%/);
+});
+
+test('Spanish covers whole phrases, numbers, route explanations and server advice', () => {
+  const app = setup();
+  app.run(`lang = 'es';`);
+  assert.equal(app.run(`tr('Find my routes')`), 'Buscar mis rutas');
+  assert.equal(app.run(`tr('3 of 10 mi')`), '3 de 10 mi');
+  assert.equal(app.run(`tr('84 more active minutes reaches this week\\'s goal.')`), 'Faltan 84 minutos activos para la meta de esta semana.');
+  assert.equal(app.run(`tr('This route scores well because it has good sidewalk coverage and avoids heavy traffic exposure. One tradeoff: it has some noticeable hills.')`),
+    'Esta ruta puntúa bien porque tiene buenas aceras y evita el tráfico pesado. Una desventaja: tiene algunas cuestas notables.');
+  assert.equal(app.run(`tr('Your blood sugar is in a good range after your activity. Well done for getting out today.')`),
+    'Su azúcar está en buen rango después de su actividad. Muy bien por salir hoy.');
+  assert.equal(app.run(`tr('Walk · 12 minutes · round trip from where you are')`), 'Caminar · 12 minutos · ida y vuelta desde donde está');
+  assert.equal(app.run(`tr('Something we never listed')`), 'Something we never listed');
+  app.run(`lang = 'en';`);
+  assert.equal(app.run(`tr('Find my routes')`), 'Find my routes');
+});
+
+test('the check-in text to a contact is written in Spanish when Spanish is on', async () => {
+  const app = setup();
+  app.run(`lang = 'es'; savedProfile = {emergency_contact_phone: '2055550142'};
+    session = {id: 's1', status: 'selected', estimated_minutes: 20, distance_m: 1609, route_geometry: [[33.5, -86.8]]};
+    window.location.href = '';`);
+  await app.nodes.get('btn-tell').onclick();
+  assert.match(decodeURIComponent(app.run('window.location.href')), /Voy a caminar 20 minutos/);
+});
+
+test('deleting the account sends the password and returns to sign-in', async () => {
+  const calls = [];
+  const app = setup(async (url, options) => { calls.push({url, body: JSON.parse(options.body)}); return {ok: true, status: 204, text: async () => ''}; });
+  app.run(`accessToken = 'token'; signedInUserId = 'u1';`);
+  app.nodes.get('delete-password').value = 'my long password';
+  app.nodes.get('btn-delete-account').closest = () => ({open: true});
+  await app.nodes.get('btn-delete-account').onclick();
+  assert.equal(calls[0].url, '/auth/delete-account');
+  assert.equal(calls[0].body.password, 'my long password');
+  assert.equal(app.run('accessToken'), null);
+  assert(app.nodes.get('screen-auth').classList.contains('active'));
+});
+
+test('finishing with no signal keeps the walk and sends it when back online', async () => {
+  let online = false;
+  const calls = [];
+  const app = setup(async (url, options) => {
+    calls.push({url, method: options.method, body: options.body ? JSON.parse(options.body) : null});
+    if (!online) throw new TypeError('Failed to fetch');
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: []});
+  });
+  app.run(`accessToken = 'token'; signedInUserId = 'u1';
+    session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};
+    trackStartedAt = Date.now() - 20 * 60000;`);
+  await app.nodes.get('btn-complete').onclick();
+  assert.equal(app.run('session.status'), 'completed');
+  assert.equal(app.run('pendingInMemory.length'), 1);
+  online = true;
+  calls.length = 0;
+  await app.run('flushPending()');
+  const sent = calls.find((c) => c.method === 'PATCH');
+  assert.equal(sent.url, '/route/sessions/s1');
+  assert.equal(sent.body.status, 'completed');
+  assert(Math.abs(sent.body.measured_minutes - 20) < 0.3);
+  assert.equal(app.run('pendingInMemory.length'), 0);
+});
+
+test('Spanish translates each part of a "·" line, dates included', () => {
+  const app = setup();
+  app.run(`lang = 'es';`);
+  assert.equal(app.run(`tr('Last done 27 sept · felt easy')`), 'Última vez: 27 sept · se sintió fácil');
+  assert.equal(app.run(`tr('Done 3 times, last 27 sept · felt hard')`), 'Hecha 3 veces, la última el 27 sept · se sintió difícil');
+});

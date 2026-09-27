@@ -24,6 +24,8 @@ os.environ.setdefault(
 )
 os.environ.setdefault("DATABASE_URL", "sqlite:///./_unused_in_tests.db")
 os.environ.setdefault("ROUTE_PROVIDER", "mock")
+os.environ.setdefault("WEATHER_ENABLED", "false")
+os.environ.setdefault("OVERPASS_URL", "")
 
 import pytest
 from fastapi.testclient import TestClient

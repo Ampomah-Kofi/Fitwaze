@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -60,6 +60,7 @@ from app.routers import auth as auth_router  # noqa: E402
 from app.routers import profile as profile_router  # noqa: E402
 from app.routers import activity as activity_router  # noqa: E402
 from app.routers import route as route_router  # noqa: E402
+from app.routers import reminder as reminder_router  # noqa: E402
 from app.routers import progress as progress_router  # noqa: E402
 
 app.include_router(auth_router.router)
@@ -67,6 +68,7 @@ app.include_router(profile_router.router)
 app.include_router(activity_router.router)
 app.include_router(route_router.router)
 app.include_router(progress_router.router)
+app.include_router(reminder_router.router)
 
 
 # --- Demo client -----------------------------------------------------------
@@ -78,10 +80,66 @@ app.include_router(progress_router.router)
 DEMO_PAGE = Path(__file__).parent / "static" / "demo.html"
 
 
+# --- Install to the home screen ----------------------------------------------
+# A web app manifest and icons let people add FitWaze to their home screen,
+# where it opens full screen like an installed app (no browser bars).
+STATIC_DIR = Path(__file__).parent / "static"
+APP_ICONS = {"icon-180.png", "icon-192.png", "icon-512.png"}
+
+MANIFEST = {
+    "name": "FitWaze",
+    "short_name": "FitWaze",
+    "description": "Personalized walks and rides near home.",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#f2f2f7",
+    "theme_color": "#246347",
+    "icons": [
+        {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+        {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+    ],
+}
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def web_manifest() -> JSONResponse:
+    if settings.environment.lower() == "production":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return JSONResponse(MANIFEST, media_type="application/manifest+json")
+
+
+def _icon_route(name: str):
+    # One explicit route per icon: nothing else in the folder is reachable.
+    def serve_icon() -> FileResponse:
+        if settings.environment.lower() == "production":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        return FileResponse(STATIC_DIR / name, media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=86400"})
+    app.add_api_route(f"/{name}", serve_icon, methods=["GET"], include_in_schema=False)
+
+
+for _icon in sorted(APP_ICONS):
+    _icon_route(_icon)
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker() -> FileResponse:
+    """Keeps the app and recently seen map tiles on the phone for weak signal.
+    Served from the root so it can look after the whole app."""
+    if settings.environment.lower() == "production":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return FileResponse(STATIC_DIR / "sw.js", media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
 @app.get("/", include_in_schema=False)
 @app.get("/demo", include_in_schema=False)
 @app.get("/mobile", include_in_schema=False)
 def demo_page() -> FileResponse:
     if settings.environment.lower() == "production" or not DEMO_PAGE.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return FileResponse(DEMO_PAGE, media_type="text/html")
+    # Always check for a newer page: without this, phones keep showing the
+    # version from before a deploy.
+    return FileResponse(DEMO_PAGE, media_type="text/html", headers={"Cache-Control": "no-cache"})

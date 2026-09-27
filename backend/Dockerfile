@@ -16,4 +16,8 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Apply database migrations, then serve. Hosting platforms pass the port in
+# $PORT. The caller's real address for rate limiting is read from the
+# platform proxy's X-Forwarded-For entry (TRUSTED_PROXY_HOPS), not from
+# uvicorn's --forwarded-allow-ips='*', which trusts caller-written entries.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

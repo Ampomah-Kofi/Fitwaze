@@ -98,7 +98,7 @@ _WALK_FACTOR_DESCRIPTIONS = {
     "major_crossings_inv": "avoids major road crossings",
     "slope_inv": "stays relatively flat",
     "step_free": "avoids steps and stairs",
-    "trail_bonus": "uses a marked trail",
+    "trail_bonus": "uses paths, trails or green space",
     "safety_score": "feels like a safe, well-used route",
 }
 
@@ -117,7 +117,7 @@ _WALK_FACTOR_CAVEATS = {
     "traffic_exposure_inv": "runs alongside busier traffic than ideal",
     "major_crossings_inv": "involves a few major road crossings",
     "slope_inv": "has some noticeable hills",
-    "trail_bonus": "doesn't use a dedicated trail",
+    "trail_bonus": "stays mostly on streets rather than paths or green space",
     "safety_score": "has a lower safety score than the other options",
 }
 
@@ -369,6 +369,9 @@ def feasibility_problem(
     withholding a route because of a placeholder value would quietly hide most
     of the map whenever the data is thin.
     """
+    # Measured danger rules a route out for everyone, whatever their profile.
+    if route.hazard_reason:
+        return route.hazard_reason
     if profile is None:
         return None
 
