@@ -26,7 +26,7 @@ from app.engines.calories import estimate_calories
 from app.models.profile import HealthProfile
 from app.models.session import ActivitySession
 from app.models.user import User
-from app.schemas.progress import GlucoseWalk, ProgressResponse, ProgressSessionSummary
+from app.schemas.progress import Achievement, GlucoseWalk, ProgressResponse, ProgressSessionSummary
 from app.security.deps import get_current_user
 
 router = APIRouter(prefix="/progress", tags=["progress"])
@@ -73,6 +73,50 @@ def _current_streak_days(completed_dates: set[date], today: date) -> int:
         streak += 1
         cursor -= timedelta(days=1)
     return streak
+
+
+def _longest_streak_days(completed_dates: set[date]) -> int:
+    longest = 0
+    for day in completed_dates:
+        if day - timedelta(days=1) in completed_dates:
+            continue  # not the start of a run
+        length = 1
+        while day + timedelta(days=length) in completed_dates:
+            length += 1
+        longest = max(longest, length)
+    return longest
+
+
+def _best_week_minutes(minutes_by_day: dict[date, float]) -> float:
+    """Most active minutes in one calendar week (Monday to Sunday)."""
+    weeks: dict[date, float] = {}
+    for day, minutes in minutes_by_day.items():
+        monday = day - timedelta(days=day.weekday())
+        weeks[monday] = weeks.get(monday, 0.0) + minutes
+    return max(weeks.values(), default=0.0)
+
+
+# (key, title, description, unit measured, goal). Small, reachable steps
+# first: the aim is encouragement, not a leaderboard.
+ACHIEVEMENTS = (
+    ("first_walk", "First step", "Finish your first walk or ride.", "sessions", 1),
+    ("streak_3", "Three in a row", "Be active 3 days in a row.", "streak", 3),
+    ("sugar_check", "Know your numbers", "Check your blood sugar before and after a walk.", "glucose", 1),
+    ("walks_10", "Ten done", "Finish 10 walks or rides.", "sessions", 10),
+    ("miles_10", "10 miles", "Cover 10 miles in all.", "miles", 10),
+    ("week_150", "150-minute week", "Reach the weekly goal of 150 active minutes.", "week", 150),
+    ("streak_7", "Full week", "Be active 7 days in a row.", "streak", 7),
+    ("walks_25", "Habit formed", "Finish 25 walks or rides.", "sessions", 25),
+    ("miles_50", "50 miles", "Cover 50 miles in all.", "miles", 50),
+)
+
+
+def _achievements(measures: dict[str, float]) -> list[Achievement]:
+    return [
+        Achievement(key=key, title=title, description=description, earned=measures[unit] >= goal,
+                    current=round(min(measures[unit], goal), 1), goal=goal)
+        for key, title, description, unit, goal in ACHIEVEMENTS
+    ]
 
 
 MG_DL_PER_MMOL_L = 18.0
@@ -200,6 +244,18 @@ def get_progress(
                                              activity_type=s.activity_recommendation.activity_type,
                                              before_mg_dl=before, after_mg_dl=after))
     glucose_walks = glucose_walks[-GLUCOSE_WALK_LIMIT:]  # the latest, oldest first
+    local_minutes: dict[date, float] = {}
+    for s in completed:
+        if s.id in completed_at_utc:
+            day = completed_at_utc[s.id].astimezone(zone).date()
+            local_minutes[day] = local_minutes.get(day, 0.0) + minutes(s)
+    achievements = _achievements({
+        "sessions": len(completed),
+        "streak": _longest_streak_days(set(local_minutes)),
+        "glucose": len(glucose_walks),
+        "miles": sum(metres(s) for s in completed) / 1609.344,
+        "week": _best_week_minutes(local_minutes),
+    })
     average_change = (round(sum(w.after_mg_dl - w.before_mg_dl for w in glucose_walks) / len(glucose_walks))
                       if glucose_walks else None)
     total = len(sessions)
@@ -229,4 +285,5 @@ def get_progress(
         ],
         glucose_walks=glucose_walks,
         average_glucose_change_mg_dl=average_change,
+        achievements=achievements,
     )

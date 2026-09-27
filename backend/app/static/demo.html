@@ -827,6 +827,40 @@
   .past-info span { font-size: 13px; color: var(--muted); }
   .past-route button { flex: none; width: auto; min-height: 36px; padding: 0 14px; margin: 0; font-size: 15px; }
 
+
+  /* Let someone know; the 15-15 timer. */
+  .tell-btn { margin-top: 8px; }
+  .low-timer { margin: 4px 0 12px; }
+  .low-timer .help-btn { width: 100%; background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+  .low-timer-out { margin-top: 8px; text-align: center; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+
+  /* Achievements. */
+  .badges-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .badges-head h3 { margin: 0; font-size: 17px; }
+  .badges-head span { font-size: 14px; color: var(--muted); }
+  .badges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .badge { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+    padding: 12px 6px; border-radius: 16px; background: var(--fill); }
+  .badge b { font-size: 13px; line-height: 1.2; color: var(--ink); }
+  .badge small { font-size: 11px; line-height: 1.25; color: var(--muted); }
+  .badge-medal { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--card); color: var(--muted); }
+  .badge-medal svg { width: 24px; height: 24px; }
+  .badge.earned { background: var(--accent-tint); }
+  .badge.earned .badge-medal { background: var(--accent); color: #fff; }
+  .badge-bar { display: block; width: 70%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 2px; }
+  .badge-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+
+  /* Daily reminder. */
+  .reminder-card { margin-top: 18px; }
+  .reminder-card h3 { margin: 0 0 4px; font-size: 17px; }
+  .reminder-card p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  .reminder-row { display: flex; gap: 10px; align-items: center; }
+  .reminder-row input { margin: 0; flex: 0 0 148px; }
+  .reminder-row button { margin: 0; flex: 1; min-width: 0; white-space: nowrap; font-size: 15px; padding: 0 10px; }
+
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
      system dark colours. Only tokens change, plus the few places that
@@ -1122,6 +1156,10 @@
           <li>Rest for 15 minutes, then check your blood sugar if you can.</li>
           <li>Don't keep walking until you feel better.</li>
         </ol>
+        <div class="low-timer">
+          <button id="btn-low-timer" class="help-btn" type="button">I took sugar: start 15-minute timer</button>
+          <div id="low-timer-out" class="low-timer-out" role="timer" aria-live="off" hidden></div>
+        </div>
         <p class="help-urgent">Chest pain, trouble breathing or fainting: call 911 now.</p>
         <div class="help-actions">
           <a id="help-call-contact" class="help-btn" hidden>Call contact</a>
@@ -1182,6 +1220,7 @@
         <div id="track-out" class="stats" hidden></div>
         <div class="goal-bar" id="goal-bar" hidden><span id="goal-bar-fill"></span></div>
         <button id="btn-track">Start activity</button>
+        <button id="btn-tell" class="quiet tell-btn" type="button">Let someone know I'm going</button>
         <div class="side-by-side sheet-actions">
           <button id="btn-complete" class="ghost">Finish</button>
           <button id="btn-abandon" class="danger">End early</button>
@@ -1211,6 +1250,7 @@
       <div id="after-walk-out" class="card after-walk" hidden></div>
       <div id="week-ring" class="card ring-card"></div>
       <div id="glucose-card" class="card glucose-card" hidden></div>
+      <div id="badges-card" class="card badges-card" hidden></div>
       <div id="progress-out" class="stats"></div>
       <div id="recent-out"></div>
       <div id="simulation-progress" class="card" hidden></div>
@@ -1218,6 +1258,14 @@
       <p class="note">Downloads a spreadsheet of your walks and rides (date, minutes, miles, calories, how it felt,
         blood sugar afterwards) that you can email or show to your doctor or nurse.</p>
       <button id="btn-progress" class="quiet" style="margin-top:12px">Refresh</button>
+      <div class="card reminder-card">
+        <h3>Daily reminder</h3>
+        <p>Add a daily alert to your phone's calendar for your check-in and walk.</p>
+        <div class="reminder-row">
+          <input id="reminder-time" type="time" value="07:30" aria-label="Reminder time" />
+          <button id="btn-reminder" class="ghost" type="button">Add to my calendar</button>
+        </div>
+      </div>
       <label id="theme-label" style="margin-top:18px">Appearance</label>
       <div class="segmented segmented-3" id="theme-group" role="group" aria-labelledby="theme-label">
         <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
@@ -2270,6 +2318,7 @@ function renderSession() {
   el("btn-track").disabled = terminal;
   el("btn-track").textContent = session.simulated ? "Start simulation" : "Start activity";
   el("btn-gpx").disabled = Boolean(session.simulated);
+  el("btn-tell").hidden = Boolean(session.simulated) || terminal;
   if (session.simulated) el("track-note").textContent = "Demo only: follows the selected route automatically. It does not use GPS or count as real exercise.";
 }
 
@@ -2301,6 +2350,10 @@ async function updateSession(status, extra) {
 }
 
 function leaveJourney(status) {
+  clearInterval(lowTimer);
+  lowTimer = null;
+  el("low-timer-out").hidden = true;
+  el("btn-low-timer").textContent = "I took sugar: start 15-minute timer";
   el("finish-sheet").hidden = true;
   el("help-sheet").hidden = true;
   el("btn-unwell").hidden = true;
@@ -2503,6 +2556,78 @@ function announceStart() {
     hot ? "It's hot today. Sip water, go slowly, and stop if you feel dizzy."
         : "Follow the green line. We'll tell you when to turn back.");
 }
+
+
+// --- Let someone know ------------------------------------------------------------
+// Before heading out, a text to the emergency contact (or anyone, via the
+// share sheet) saying where the walk starts and when to expect them back.
+function returnByText(minutes) {
+  // The planned time plus a little slack, rounded up to the next 5 minutes.
+  const back = new Date(Date.now() + (minutes + 10) * 60000);
+  back.setMinutes(Math.ceil(back.getMinutes() / 5) * 5, 0, 0);
+  return back.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function tellSomeoneMessage() {
+  const start = session.route_geometry && session.route_geometry[0];
+  const where = start ? " Start: https://maps.google.com/?q=" + start[0].toFixed(5) + "," + start[1].toFixed(5) : "";
+  return "I'm going for a " + session.estimated_minutes + "-minute " + activityWord() + " (" +
+    distanceText(session.distance_m) + " " + UNIT + " loop). I should be back by " +
+    returnByText(session.estimated_minutes) + ". If you don't hear from me, please check on me." + where;
+}
+
+el("btn-tell").onclick = async () => {
+  if (!session) return;
+  const text = tellSomeoneMessage();
+  const phone = savedProfile && savedProfile.emergency_contact_phone;
+  if (phone) {
+    // "?&body=" works in both iPhone and Android messaging apps.
+    window.location.href = "sms:" + phone.replace(/[^+0-9]/g, "") + "?&body=" + encodeURIComponent(text);
+    return;
+  }
+  try {
+    if (navigator.share) { await navigator.share({ text: text }); return; }
+    await navigator.clipboard.writeText(text);
+    toast("Message copied. Paste it to someone you trust.");
+  } catch (error) {
+    if (error && error.name === "AbortError") return;
+    toast("Add an emergency contact in your profile to text them in one tap.", true);
+  }
+};
+
+// --- Low blood sugar: the 15-15 rule --------------------------------------------
+// 15 g of fast sugar, wait 15 minutes, recheck. The timer keeps count so the
+// person doesn't have to while they feel unwell, and says when to recheck.
+const LOW_TIMER_SECONDS = 15 * 60;
+let lowTimer = null;
+let lowTimerEnds = 0;
+
+function renderLowTimer() {
+  const left = Math.max(0, Math.round((lowTimerEnds - Date.now()) / 1000));
+  const text = Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0");
+  el("low-timer-out").textContent = left ? "Recheck in " + text : "Time to recheck your blood sugar.";
+  if (!left) {
+    clearInterval(lowTimer);
+    lowTimer = null;
+    el("btn-low-timer").textContent = "Took more sugar: start again";
+    playTones(TONES.turn);
+    try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (error) {}
+    const tip = "15 minutes are up. Check your blood sugar. If it is still under 70, take another 15 grams of sugar " +
+      "and wait 15 minutes again. When it is back above 70, have a snack before you go on.";
+    speak(tip);
+    notifyIfAway("Recheck your blood sugar", tip);
+  }
+}
+
+el("btn-low-timer").onclick = () => {
+  unlockSound();
+  lowTimerEnds = Date.now() + LOW_TIMER_SECONDS * 1000;
+  clearInterval(lowTimer);
+  lowTimer = setInterval(renderLowTimer, 1000);
+  el("low-timer-out").hidden = false;
+  el("btn-low-timer").textContent = "Timer running";
+  renderLowTimer();
+};
 
 // --- "Not feeling well?" -------------------------------------------------------
 // One tap from anywhere on the walk: stop, see what to do for a low, call
@@ -3153,6 +3278,23 @@ function glucoseCard(walks, averageChange) {
     rows + "</tbody></table></details>";
 }
 
+// Achievements: earned ones in colour with a tick; the rest show how close.
+function badgesCard(achievements) {
+  const earned = achievements.filter((a) => a.earned).length;
+  const unit = { miles_10: " mi", miles_50: " mi", week_150: " min", streak_3: " days", streak_7: " days" };
+  return '<div class="badges-head"><h3>Achievements</h3><span>' + earned + " of " + achievements.length + "</span></div>" +
+    '<div class="badges">' + achievements.map((a) => {
+      const pct = Math.round(Math.min(1, a.current / a.goal) * 100);
+      return '<div class="badge' + (a.earned ? " earned" : "") + '" title="' + esc(a.description) + '">' +
+        '<span class="badge-medal" aria-hidden="true">' + (a.earned
+          ? '<svg viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+          : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"/></svg>') +
+        "</span><b>" + esc(a.title) + "</b><small>" + (a.earned ? esc(a.description)
+          : Math.round(a.current) + " of " + a.goal + (unit[a.key] || "")) + "</small>" +
+        (a.earned ? "" : '<i class="badge-bar"><i style="width:' + pct + '%"></i></i>') + "</div>";
+    }).join("") + "</div>";
+}
+
 async function refreshProgress() {
   if (!accessToken) return;
   try {
@@ -3170,10 +3312,18 @@ async function refreshProgress() {
     el("recent-out").innerHTML = recentList(progress.recent_sessions || []);
     el("glucose-card").innerHTML = glucoseCard(progress.glucose_walks || [], progress.average_glucose_change_mg_dl);
     el("glucose-card").hidden = false;
+    el("badges-card").innerHTML = badgesCard(progress.achievements || []);
+    el("badges-card").hidden = !(progress.achievements || []).length;
   } catch (error) { toast(error.message, true); }
 }
 
 el("btn-progress").onclick = busy(el("btn-progress"), refreshProgress);
+
+// Opening the calendar file hands it to the phone, which offers to add it.
+el("btn-reminder").onclick = () => {
+  const time = /^\d{2}:\d{2}$/.test(el("reminder-time").value) ? el("reminder-time").value : "07:30";
+  window.location.href = "/reminder.ics?time=" + encodeURIComponent(time);
+};
 
 el("btn-export").onclick = busy(el("btn-export"), async () => {
   try {

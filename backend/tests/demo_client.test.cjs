@@ -579,3 +579,39 @@ test('routes done before are offered again and can be started', async () => {
   assert.equal(app.run('session.id'), 'new1');
   assert.equal(app.nodes.get('session-card').hidden, false);
 });
+
+test('let someone know texts the emergency contact the route and return time', async () => {
+  const app = setup();
+  app.run(`savedProfile = {emergency_contact_phone: '(205) 555-0142'};
+    session = {id: 's1', status: 'selected', estimated_minutes: 20, distance_m: 1609,
+      route_geometry: [[33.5186, -86.8104], [33.52, -86.81]]};
+    window.location.href = '';`);
+  await app.nodes.get('btn-tell').onclick();
+  const href = app.run('window.location.href');
+  assert.match(href, /^sms:2055550142\?&body=/);
+  const body = decodeURIComponent(href.split('body=')[1]);
+  assert.match(body, /20-minute walk/);
+  assert.match(body, /back by \d{1,2}:\d{2}/);
+  assert.match(body, /maps\.google\.com\/\?q=33\.51860,-86\.81040/);
+});
+
+test('the 15-15 timer counts down and says when to recheck', () => {
+  const app = setup();
+  app.nodes.get('btn-low-timer').onclick();
+  assert.equal(app.nodes.get('low-timer-out').hidden, false);
+  assert.match(app.nodes.get('low-timer-out').textContent, /Recheck in 1[45]:\d\d/);
+  app.run(`lowTimerEnds = Date.now() - 1; renderLowTimer();`);
+  assert.match(app.nodes.get('low-timer-out').textContent, /Time to recheck/);
+  assert.equal(app.run('lowTimer'), null);
+});
+
+test('achievements show what is earned and how close the rest are', () => {
+  const app = setup();
+  const html = app.run(`badgesCard([
+    {key: 'first_walk', title: 'First step', description: 'Finish your first walk or ride.', earned: true, current: 1, goal: 1},
+    {key: 'miles_10', title: '10 miles', description: 'Cover 10 miles in all.', earned: false, current: 3.4, goal: 10}])`);
+  assert.match(html, /1 of 2/);
+  assert.match(html, /badge earned/);
+  assert.match(html, /3 of 10 mi/);
+  assert.match(html, /width:34%/);
+});

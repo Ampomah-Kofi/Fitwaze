@@ -60,6 +60,7 @@ from app.routers import auth as auth_router  # noqa: E402
 from app.routers import profile as profile_router  # noqa: E402
 from app.routers import activity as activity_router  # noqa: E402
 from app.routers import route as route_router  # noqa: E402
+from app.routers import reminder as reminder_router  # noqa: E402
 from app.routers import progress as progress_router  # noqa: E402
 
 app.include_router(auth_router.router)
@@ -67,6 +68,7 @@ app.include_router(profile_router.router)
 app.include_router(activity_router.router)
 app.include_router(route_router.router)
 app.include_router(progress_router.router)
+app.include_router(reminder_router.router)
 
 
 # --- Demo client -----------------------------------------------------------

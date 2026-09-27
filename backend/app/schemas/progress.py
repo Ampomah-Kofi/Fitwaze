@@ -39,6 +39,16 @@ class GlucoseWalk(BaseModel):
     after_mg_dl: int
 
 
+class Achievement(BaseModel):
+    key: str
+    title: str
+    description: str
+    earned: bool
+    # How far along, in the achievement's own unit (walks, days, miles...).
+    current: float
+    goal: float
+
+
 class ProgressResponse(BaseModel):
     sessions_selected: int
     sessions_completed: int
@@ -54,3 +64,4 @@ class ProgressResponse(BaseModel):
     glucose_walks: list[GlucoseWalk] = []
     # Average of (after - before) over glucose_walks; negative means lower.
     average_glucose_change_mg_dl: int | None = None
+    achievements: list[Achievement] = []
