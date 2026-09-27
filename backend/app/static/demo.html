@@ -728,6 +728,63 @@
   #tabs { position: relative; z-index: 800; }
   .finish-saved { margin: 0 0 6px; font-weight: 600; font-size: 15px; color: var(--good-ink, var(--accent)); }
 
+
+  /* ======================================================================
+     Sign in: a small map of a loop home, one form with an iOS switch
+     between signing in and creating an account.
+     ====================================================================== */
+  #screen-auth.active { display: block; }
+  .login { max-width: 460px; margin: 0 auto; }
+  .login-hero { position: relative; border-radius: 24px; overflow: hidden; background: var(--card);
+    box-shadow: 0 1px 0 var(--line); margin-bottom: 12px; }
+  .login-map { display: block; width: 100%; height: 118px; }
+  .lm-ground { fill: #eef1ea; } .lm-park { fill: #cfe8c9; } .lm-water { fill: #cfe3f4; }
+  .lm-street path { stroke: #fff; stroke-width: 9; fill: none; }
+  .lm-lane path { stroke: #fff; stroke-width: 4; fill: none; opacity: .85; }
+  .lm-route-casing { fill: none; stroke: #fff; stroke-width: 11; stroke-linejoin: round; }
+  .lm-route { fill: none; stroke: #34c759; stroke-width: 6; stroke-linejoin: round;
+    stroke-dasharray: 520; stroke-dashoffset: 520; animation: lm-draw 2.4s .2s ease-out forwards; }
+  .lm-arrows path { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .lm-halo { fill: rgba(10, 132, 255, .18); animation: lm-pulse 2.4s ease-in-out infinite; transform-origin: 112px 122px; }
+  .lm-start { fill: #0a84ff; stroke: #fff; stroke-width: 3; }
+  @keyframes lm-draw { to { stroke-dashoffset: 0; } }
+  @keyframes lm-pulse { 50% { transform: scale(1.35); opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .lm-route { animation: none; stroke-dashoffset: 0; } .lm-halo { animation: none; } }
+  .login-copy { padding: 14px 20px 18px; }
+  .login-copy h2 { font-size: 26px; line-height: 1.1; letter-spacing: -.02em; margin: 0 0 8px; color: var(--ink); text-transform: none; }
+  .login-copy p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
+  .auth-card { padding: 18px 20px 20px; border-radius: 24px; margin: 0 0 12px; }
+  .auth-card h3 { font-size: 22px; margin: 16px 0 2px; }
+  .auth-card > p#auth-sub { margin: 0 0 14px; color: var(--muted); font-size: 15px; }
+  .auth-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 3px; gap: 0;
+    background: var(--fill); border-radius: 10px; }
+  .auth-switch button { min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--ink);
+    font-size: 15px; font-weight: 500; box-shadow: none; }
+  .auth-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); border: 0;
+    font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 1px 1px rgba(0, 0, 0, .04); }
+  .field-hint { margin: -6px 0 14px; font-size: 13px; color: var(--muted); }
+  .auth-message { margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; font-size: 15px; line-height: 1.4;
+    background: rgba(255, 59, 48, .1); color: var(--bad); }
+  .auth-message.info { background: var(--accent-tint); color: var(--good-ink, var(--ink)); }
+  #btn-auth { width: 100%; min-height: 50px; font-size: 17px; border-radius: 14px; margin-top: 4px; }
+  .auth-trust { display: flex; gap: 8px; justify-content: center; align-items: flex-start; margin: 14px 0 0 !important;
+    font-size: 13px !important; line-height: 1.35; color: var(--muted); text-align: left; }
+  .auth-trust::before { margin-top: 2px; }
+  .auth-trust::before { content: ""; flex: none; width: 12px; height: 14px; background: currentColor; opacity: .8;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14'%3E%3Cpath d='M2 6V4a4 4 0 0 1 8 0v2h1v8H1V6Zm2 0h4V4a2 2 0 0 0-4 0Z'/%3E%3C/svg%3E") center/contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14'%3E%3Cpath d='M2 6V4a4 4 0 0 1 8 0v2h1v8H1V6Zm2 0h4V4a2 2 0 0 0-4 0Z'/%3E%3C/svg%3E") center/contain no-repeat; }
+  .login-points { list-style: none; margin: 0 0 8px; padding: 6px 18px; background: var(--card); border-radius: 24px; }
+  .login-points li { display: flex; gap: 14px; align-items: center; padding: 12px 0; }
+  .login-points li + li { border-top: 1px solid var(--line); }
+  .login-points b { display: block; font-size: 15px; color: var(--ink); }
+  .login-points span:last-child { font-size: 14px; color: var(--muted); line-height: 1.35; }
+  .lp-icon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+    background: var(--accent-tint); color: var(--accent); }
+  .lp-icon svg { width: 20px; height: 20px; }
+  .signout { margin-top: 18px; width: 100%; }
+  .appbar-signout { margin-left: auto; align-self: center; width: auto; min-height: 32px; padding: 0 12px;
+    border: 0; border-radius: 16px; background: var(--fill); color: var(--ink); font-size: 14px; font-weight: 500; }
+
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
      system dark colours. Only tokens change, plus the few places that
@@ -745,6 +802,11 @@
     }
     body { background: #000; }
     button { color: #000; }
+    .lm-ground { fill: #1c1f1d; } .lm-park { fill: #1f3a24; } .lm-water { fill: #152a3d; }
+    .lm-street path, .lm-lane path { stroke: #3a3d3b; } .lm-route-casing { stroke: #0b0d0c; }
+    .auth-switch button, .auth-switch button[aria-pressed="true"] { color: #fff; }
+    .auth-switch button[aria-pressed="true"] { background: #636366; }
+    .auth-message { background: rgba(255, 69, 58, .16); }
     button.ghost, button.quiet, button.danger, #tabs button, .segmented button, .mobile-route-switch button,
     .sheet-hide, .install-close, .password-field button, .locate-fab, .map-fab { color: inherit; }
     button.ghost { color: var(--accent); }
@@ -789,41 +851,62 @@
     <h1>FitWaze</h1>
     <span class="brand-caption">person + place</span>
     <span class="demo-badge">Demo experience</span>
+    <button id="btn-signout-top" class="appbar-signout" type="button" hidden>Sign out</button>
   </div>
 
   <main id="app-main">
     <!-- ---------- Sign in ---------- -->
     <section id="screen-auth" class="screen active">
-      <div class="welcome-art">
-        <span class="eyebrow">A little movement. A new perspective.</span>
-        <h2>Find your path.<br />Move your way.</h2>
-        <p>Walking and cycling routes shaped around you, your pace, and the places nearby.</p>
-        <svg class="route-art" viewBox="0 0 440 230" fill="none" aria-hidden="true">
-          <path d="M-20 190C60 60 125 260 235 112S380 50 465 10" stroke="#2d5544" stroke-width="65"/>
-          <path d="M-20 90C110-35 150 180 265 175S380 140 465 215" stroke="#42634c" stroke-width="2"/>
-          <path d="M-20 65C110-60 150 155 265 150S380 115 465 190" stroke="#42634c" stroke-width="2"/>
-          <path d="M68 174C43 96 121 49 184 87S203 200 278 166 347 54 372 59" stroke="#d2e5a8" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 11"/>
-          <circle cx="68" cy="174" r="14" fill="#193e32" stroke="#d2e5a8" stroke-width="3"/><circle cx="68" cy="174" r="5" fill="#d2e5a8"/>
-          <path d="M372 80s-17-17-17-29a17 17 0 0 1 34 0c0 12-17 29-17 29Z" fill="#d2e5a8"/><circle cx="372" cy="51" r="5" fill="#193e32"/>
-          <circle cx="290" cy="48" r="18" fill="#42634c"/><path d="M290 36v25m-7-17 7 7 7-7" stroke="#8fa783" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="126" cy="190" r="12" fill="#42634c"/>
-        </svg>
-        <div class="welcome-footer">Your pace. Your starting point. Your next step.</div>
-      </div>
-      <div class="card auth-card">
-        <span class="eyebrow">Let's get moving</span>
-        <h3>Let's get started</h3>
-        <p>Your next walk or ride starts here.</p>
-        <label for="email">Email</label>
-        <input id="email" type="email" autocomplete="username" placeholder="you@example.com" />
-        <label for="password">Password</label>
-        <div class="password-field">
-          <input id="password" type="password" autocomplete="current-password" placeholder="At least 12 characters" />
-          <button id="btn-password" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+      <div class="login">
+        <div class="login-hero">
+          <svg class="login-map" viewBox="0 40 360 124" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <rect width="360" height="190" class="lm-ground"/>
+            <path class="lm-park" d="M214 22h96a16 16 0 0 1 16 16v44a16 16 0 0 1-16 16h-96a16 16 0 0 1-16-16V38a16 16 0 0 1 16-16Z"/>
+            <path class="lm-water" d="M-10 168c50-14 90 6 140-4s80-26 130-14 80 20 110 10v40H-10Z"/>
+            <g class="lm-street">
+              <path d="M0 58h360M0 122h360M72 0v190M150 0v190M244 0v190M318 0v190"/>
+            </g>
+            <g class="lm-lane"><path d="M0 90h360M112 0v190M196 0v190M282 0v190"/></g>
+            <path class="lm-route-casing" d="M112 122V58h132v64h-48v32h-84Z"/>
+            <path class="lm-route" d="M112 122V58h132v64h-48v32h-84Z"/>
+            <g class="lm-arrows"><path d="m170 53 7 5-7 5M239 86l5 7 5-7M150 149l-7 5 7 5"/></g>
+            <circle class="lm-halo" cx="112" cy="122" r="17"/>
+            <circle class="lm-start" cx="112" cy="122" r="8"/>
+          </svg>
+          <div class="login-copy">
+            <h2>Walks that fit your morning.</h2>
+            <p>Check in, get a safe loop from your door, and always come back to where you started.</p>
+          </div>
         </div>
-        <button id="btn-register">Create account</button>
-        <button id="btn-login" class="ghost">Sign in to my account</button>
-        <p class="note" id="account-state">Not signed in.</p>
+
+        <form id="auth-form" class="card auth-card" novalidate>
+          <div class="segmented segmented-2 auth-switch" role="group" aria-label="Account">
+            <button type="button" data-auth-mode="login" aria-pressed="true">Sign in</button>
+            <button type="button" data-auth-mode="register" aria-pressed="false">Create account</button>
+          </div>
+          <h3 id="auth-title">Welcome back</h3>
+          <p id="auth-sub">Sign in to see today's plan and your progress.</p>
+          <label for="email">Email</label>
+          <input id="email" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="you@example.com" />
+          <label for="password">Password</label>
+          <div class="password-field">
+            <input id="password" type="password" autocomplete="current-password" placeholder="Your password" />
+            <button id="btn-password" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+          <p id="password-hint" class="field-hint" hidden>At least 10 characters. A short sentence you'll remember works well.</p>
+          <p id="auth-message" class="auth-message" role="alert" hidden></p>
+          <button id="btn-auth" type="submit">Sign in</button>
+          <p class="note auth-trust" id="account-state">Your health details are encrypted and only used to plan your walks.</p>
+        </form>
+
+        <ul class="login-points">
+          <li><span class="lp-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></span>
+            <span><b>Morning check-in</b>How you feel and your blood sugar set today's plan.</span></li>
+          <li><span class="lp-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 19c0-8 14 2 14-7S5 13 5 5"/><circle cx="5" cy="4" r="2"/><circle cx="5" cy="20" r="2"/></svg></span>
+            <span><b>Real streets near home</b>Sidewalks, hills and busy roads checked for you.</span></li>
+          <li><span class="lp-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M6 16v-4m6 4V8m6 8V4"/></svg></span>
+            <span><b>Progress you can share</b>Minutes, miles and calories for your care team.</span></li>
+        </ul>
       </div>
     </section>
 
@@ -1095,6 +1178,7 @@
         <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
         <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
       </div>
+      <button id="btn-signout" class="quiet signout">Sign out</button>
       <p class="note">Map data &copy; OpenStreetMap contributors.</p>
     </section>
   </main>
@@ -1347,8 +1431,9 @@ async function authenticatedFetch(path, options = {}) {
           if (refreshed.status === 401) {
             accessToken = null;
             el("tabs").hidden = true;
+            el("btn-signout-top").hidden = true;
             showScreen("auth");
-            el("account-state").textContent = "Please sign in again. Your current route is kept in this tab.";
+            authMessage("Please sign in again. Your current route is kept in this tab.", true);
           }
           throw new Error("Could not renew your session. Sign in again if requested, then retry.");
         }
@@ -1434,60 +1519,156 @@ function profilePayload() {
   };
 }
 
-async function authenticate(path) {
-  const email = el("email").value.trim();
-  const password = el("password").value;
-  if (!email || !password) { toast("Email and password are required.", true); return; }
-  try {
-    const data = await api(path, { method: "POST", body: { email: email, password: password } });
-    if (signedInUserId && signedInUserId !== data.user.id) {
-      resetJourney();
-      session = null;
-      recommendation = null;
-      startPoint = null;
-      homePoint = null;
-      simulatedSessions.length = 0;
-      renderSimulationProgress();
-      invalidateOptions();
-      if (startMarker) { startMarker.remove(); startMarker = null; }
-      if (accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
-      el("session-card").hidden = true;
-      el("recommendation-out").innerHTML = "";
-      el("progress-out").innerHTML = "";
-      el("btn-options").disabled = true;
-      el("route-context").textContent = "Start with an activity recommendation in Today.";
-      el("start-state").textContent = "Choose your starting point.";
-    }
-    signedInUserId = data.user.id;
-    accessToken = data.access_token;
-    try {
-      const profile = await api("/profile");
-      savedProfile = profile;
-      for (const field of Object.keys(profilePayload())) {
-        if (profile[field] === undefined) continue;
-        if (typeof profile[field] === "boolean") el(field).checked = profile[field];
-        else el(field).value = profile[field] === null ? "" : String(profile[field]);
-      }
-      showUsUnits(profile);
-      el("profile-editor").open = false;
-    } catch (error) {
-      el("profile-editor").open = true;
-      if (error.status !== 404) toast("Signed in, but your saved profile could not be loaded. " + error.message, true);
-    }
-    await loadHome();
-    offerInstall();
-    el("account-state").textContent = "Signed in as " + data.user.email;
-    el("tabs").hidden = false;
-    showScreen(session && session.status === "selected" ? "route" : "today");
-    toast("Signed in.");
-    refreshProgress();
-  } catch (error) {
-    toast(error.message, true);
-  }
+// --- Signing in ---------------------------------------------------------------
+let authMode = "login";
+const AUTH_TEXT = {
+  login: {title: "Welcome back", sub: "Sign in to see today's plan and your progress.", button: "Sign in",
+    autocomplete: "current-password", placeholder: "Your password"},
+  register: {title: "Create your account", sub: "It takes a minute. Your health details stay private.",
+    button: "Create account", autocomplete: "new-password", placeholder: "At least 10 characters"},
+};
+
+function setAuthMode(mode) {
+  authMode = mode === "register" ? "register" : "login";
+  const text = AUTH_TEXT[authMode];
+  el("auth-title").textContent = text.title;
+  el("auth-sub").textContent = text.sub;
+  el("btn-auth").textContent = text.button;
+  el("password").setAttribute("autocomplete", text.autocomplete);
+  el("password").setAttribute("placeholder", text.placeholder);
+  el("password-hint").hidden = authMode !== "register";
+  document.querySelectorAll("[data-auth-mode]").forEach((button) =>
+    button.setAttribute("aria-pressed", String(button.dataset.authMode === authMode)));
+  authMessage(null);
+}
+document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+  button.onclick = () => setAuthMode(button.dataset.authMode);
+});
+
+// Problems show on the form itself, where the person is looking.
+function authMessage(text, info) {
+  el("auth-message").hidden = !text;
+  el("auth-message").textContent = text || "";
+  el("auth-message").classList[info ? "add" : "remove"]("info");
 }
 
-el("btn-register").onclick = busy(el("btn-register"), () => authenticate("/auth/register"));
-el("btn-login").onclick = busy(el("btn-login"), () => authenticate("/auth/login"));
+function friendlyAuthError(error, mode) {
+  if (error.status === 401) return "That email and password don't match. Check them and try again, or create an account.";
+  if (error.status === 409) return "We couldn't create that account. If you already have one, choose Sign in.";
+  if (error.status === 422) {
+    return /email/i.test(error.message) ? "Enter your email address, like name@example.com."
+      : mode === "register" ? "Choose a password of at least 10 characters." : error.message;
+  }
+  if (error.status === 429) return "Too many tries. Wait a minute, then try again.";
+  if (!error.status) return "Can't reach FitWaze. Check your internet connection and try again.";
+  return error.message;
+}
+
+// A different person signing in on this phone must not see the last one's plan.
+function resetForNewUser() {
+  resetJourney();
+  session = null;
+  recommendation = null;
+  startPoint = null;
+  homePoint = null;
+  simulatedSessions.length = 0;
+  renderSimulationProgress();
+  invalidateOptions();
+  if (startMarker) { startMarker.remove(); startMarker = null; }
+  if (accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
+  el("session-card").hidden = true;
+  el("recommendation-out").innerHTML = "";
+  el("progress-out").innerHTML = "";
+  el("after-walk-out").hidden = true;
+  el("btn-options").disabled = true;
+  el("route-context").textContent = "Start with an activity recommendation in Today.";
+  el("start-state").textContent = "Choose your starting point.";
+}
+
+async function finishSignIn(data, greeting) {
+  if (signedInUserId && signedInUserId !== data.user.id) resetForNewUser();
+  signedInUserId = data.user.id;
+  accessToken = data.access_token;
+  try {
+    const profile = await api("/profile");
+    savedProfile = profile;
+    for (const field of Object.keys(profilePayload())) {
+      if (profile[field] === undefined) continue;
+      if (typeof profile[field] === "boolean") el(field).checked = profile[field];
+      else el(field).value = profile[field] === null ? "" : String(profile[field]);
+    }
+    showUsUnits(profile);
+    el("profile-editor").open = false;
+  } catch (error) {
+    el("profile-editor").open = true;
+    if (error.status !== 404) toast("Signed in, but your saved profile could not be loaded. " + error.message, true);
+  }
+  await loadHome();
+  offerInstall();
+  el("tabs").hidden = false;
+  el("btn-signout-top").hidden = false;
+  showScreen(session && session.status === "selected" ? "route" : "today");
+  toast(greeting || "Signed in.");
+  refreshProgress();
+}
+
+async function authenticate(mode) {
+  const email = el("email").value.trim();
+  const password = el("password").value;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { authMessage("Enter your email address, like name@example.com."); return; }
+  if (!password) { authMessage("Enter your password."); return; }
+  if (mode === "register" && password.length < 10) { authMessage("Choose a password of at least 10 characters."); return; }
+  authMessage(null);
+  // The free server sleeps when nobody has used it for a while; the first
+  // request then takes a while. Say so instead of looking stuck.
+  const slow = setTimeout(() => authMessage("Waking up the server. The first sign-in of the day can take up to a minute.", true), 4000);
+  let data;
+  try {
+    data = await api(mode === "register" ? "/auth/register" : "/auth/login",
+      { method: "POST", body: { email: email, password: password } });
+  } catch (error) {
+    authMessage(friendlyAuthError(error, mode));
+    return;
+  } finally {
+    clearTimeout(slow);
+  }
+  authMessage(null);
+  el("password").value = "";
+  await finishSignIn(data, mode === "register" ? "Account created. Welcome!" : "Signed in.");
+}
+
+el("auth-form").onsubmit = (event) => {
+  if (event && event.preventDefault) event.preventDefault();
+  return submitAuth();
+};
+const submitAuth = busy(el("btn-auth"), () => authenticate(authMode));
+
+// Stay signed in: the server's sign-in cookie (not readable by this page)
+// lasts for days, so coming back opens straight to today.
+async function resumeSignIn() {
+  try {
+    const response = await fetch("/auth/refresh", {method: "POST", credentials: "same-origin"});
+    if (!response.ok || accessToken) return;
+    await finishSignIn(await response.json(), "Welcome back.");
+  } catch (error) { /* stay on the sign-in screen */ }
+}
+
+async function signOut() {
+  if (session && session.status === "selected") { toast("Finish or end your current activity before signing out.", true); return; }
+  try { await fetch("/auth/logout", {method: "POST", credentials: "same-origin"}); } catch (error) { /* signed out here anyway */ }
+  accessToken = null;
+  signedInUserId = null;
+  savedProfile = null;
+  resetForNewUser();
+  el("tabs").hidden = true;
+  el("btn-signout-top").hidden = true;
+  setAuthMode("login");
+  showScreen("auth");
+  toast("Signed out.");
+}
+el("btn-signout").onclick = busy(el("btn-signout"), signOut);
+el("btn-signout-top").onclick = busy(el("btn-signout-top"), signOut);
+
 el("btn-password").onclick = () => {
   const show = el("password").type === "password";
   el("password").type = show ? "text" : "password";
@@ -2906,6 +3087,7 @@ document.querySelectorAll("[data-theme-choice]").forEach((button) => {
   button.onclick = () => applyTheme(button.dataset.themeChoice);
 });
 applyTheme(savedTheme());
+if (/^https?:$/.test((window.location && window.location.protocol) || "")) resumeSignIn();
 </script>
 </body>
 </html>

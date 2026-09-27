@@ -496,3 +496,50 @@ test('in the installed app, walks use native background location and alerts noti
   app.run(`stopTracking();`);
   assert.equal(app.run(`JSON.stringify(nativeCalls[nativeCalls.length - 1])`), JSON.stringify(['removeWatcher', {id: 'w1'}]));
 });
+
+test('sign in and create account share one form, switched at the top', () => {
+  const app = setup();
+  app.run(`setAuthMode('login');`);
+  assert.equal(app.nodes.get('btn-auth').textContent, 'Sign in');
+  app.run(`setAuthMode('register');`);
+  assert.equal(app.nodes.get('btn-auth').textContent, 'Create account');
+  assert.equal(app.nodes.get('password').getAttribute('autocomplete'), 'new-password');
+  assert.equal(app.nodes.get('password-hint').hidden, false);
+  app.run(`setAuthMode('login');`);
+  assert.equal(app.nodes.get('password-hint').hidden, true);
+});
+
+test('sign-in problems are explained on the form, without a network call when obvious', async () => {
+  const calls = [];
+  const app = setup(async (url) => { calls.push(url); return {ok: false, status: 401, text: async () => '{"detail": "Invalid email or password"}'}; });
+  app.nodes.get('email').value = 'not-an-email';
+  app.nodes.get('password').value = 'x';
+  await app.run(`authenticate('login')`);
+  assert.equal(calls.length, 0);
+  assert.match(app.nodes.get('auth-message').textContent, /email address/);
+  app.nodes.get('email').value = 'ama@example.com';
+  app.nodes.get('password').value = 'short';
+  await app.run(`authenticate('register')`);
+  assert.equal(calls.length, 0);
+  assert.match(app.nodes.get('auth-message').textContent, /10 characters/);
+  app.nodes.get('password').value = 'wrong password';
+  await app.run(`authenticate('login')`);
+  assert.equal(calls[0], '/auth/login');
+  assert.equal(app.nodes.get('auth-message').hidden, false);
+  assert.match(app.nodes.get('auth-message').textContent, /don't match/);
+});
+
+test('signing out ends the server session and returns to sign-in', async () => {
+  const calls = [];
+  const app = setup(async (url) => { calls.push(url); return {ok: true, status: 204, text: async () => ''}; });
+  app.run(`accessToken = 'token'; signedInUserId = 'u1'; recommendation = {id: 'r1'};`);
+  app.nodes.get('tabs').hidden = false;
+  app.nodes.get('btn-signout-top').hidden = false;
+  await app.nodes.get('btn-signout-top').onclick();
+  assert.deepEqual(calls, ['/auth/logout']);
+  assert.equal(app.run('accessToken'), null);
+  assert.equal(app.run('recommendation'), null);
+  assert.equal(app.nodes.get('tabs').hidden, true);
+  assert.equal(app.nodes.get('btn-signout-top').hidden, true);
+  assert(app.nodes.get('screen-auth').classList.contains('active'));
+});
