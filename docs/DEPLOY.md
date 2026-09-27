@@ -4,19 +4,29 @@ The repository includes a Render Blueprint (`render.yaml`) that creates the
 database and the app, generates the secrets, and serves FitWaze over HTTPS,
 which phones need before they will share their location.
 
-## One-time setup (about 10 minutes)
+## One-time setup (free, about 15 minutes)
 
+Everything below is on free plans: the app on Render, the database on Neon.
+
+**1. Free database (Neon)**
+1. Sign up at <https://neon.tech> (GitHub sign-in works; no card needed).
+2. Create a project named `fitwaze`, region **US East**.
+3. On the project dashboard, copy the **connection string**. It looks like
+   `postgresql://fitwaze_owner:...@ep-....us-east-2.aws.neon.tech/neondb?sslmode=require`.
+
+**2. Free app (Render)**
 1. Sign in at <https://dashboard.render.com> with your GitHub account.
-2. **New → Blueprint**, pick the `Ampomah-Kofi/Fitwaze` repository and the
-   branch to deploy (for example `main` once this work is merged).
-3. Render shows what it will create: a `fitwaze-db` Postgres database and a
-   `fitwaze` web service. Click **Apply**. You are asked for `ORS_API_KEY`:
-   leave it empty (it is optional).
-4. Wait for the first deploy to finish (a few minutes; it builds the Docker
-   image and runs the database migrations). Then open
-   `https://fitwaze.onrender.com` (or the name Render assigned) on a phone.
+2. **New > Blueprint**, pick `Ampomah-Kofi/Fitwaze` and the branch to deploy.
+3. When asked for `DATABASE_URL`, paste the Neon connection string. Leave
+   `ORS_API_KEY` empty. Click **Apply**.
+4. Wait for the first deploy (a few minutes: it builds the app and sets up
+   the database tables), then open `https://fitwaze.onrender.com` (or the
+   name Render assigned) on a phone.
 
-Every push to the deployed branch redeploys automatically.
+Every push to the deployed branch redeploys automatically. On the free plan
+the app sleeps after 15 minutes without visitors; the next visit takes about
+a minute to wake it. Upgrading the Render service to Starter (~$7/month)
+removes that, whenever you want.
 
 ## Check it before patients use it
 
@@ -47,8 +57,8 @@ The app shows a card with these steps after sign-in until it is installed.
 
 | Piece | Pilot default | Limits |
 | --- | --- | --- |
-| App + API | Render web service (`plan: free`) | Free services sleep after 15 minutes idle; the next visit takes ~1 minute to wake. Use the Starter plan (~$7/month) for the pilot so testers never wait. |
-| Database | Render Postgres (`plan: free`) | Free databases expire after 30 days. Upgrade to a paid plan (~$7/month) before real pilot data goes in. |
+| App + API | Render web service (`plan: free`) | Sleeps after 15 minutes idle; the next visit takes ~1 minute to wake. Starter (~$7/month) keeps it awake. |
+| Database | Neon Postgres (free plan) | 0.5 GB, does not expire; plenty for a pilot. |
 | Street routing | FOSSGIS OSRM servers (`routing.openstreetmap.de`) | Free community service for light use. For the full pilot, self-host on the Alabama map (below). |
 | Hills | OpenTopoData `ned10m` (USGS 10 m) | Free public API: 1 request/second, 1,000/day (one request per route search, plus caching). |
 | Map background | OpenStreetMap standard tiles | No key; fine for light pilot use under the OSM tile policy. Use a tile provider for a public launch. |

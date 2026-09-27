@@ -1,15 +1,10 @@
 # Render Blueprint for the FitWaze field pilot.
 #
-# Deploy: in the Render dashboard choose New > Blueprint, pick this GitHub
-# repository and branch, and click Apply. Render creates the database and the
-# app, generates the secrets, and serves the app at https://<name>.onrender.com
-# (HTTPS, so phones can share their location). See docs/DEPLOY.md.
-databases:
-  - name: fitwaze-db
-    plan: free
-    databaseName: fitwaze
-    user: fitwaze
-
+# Free setup: the app runs on Render's free plan and the database on Neon's
+# free Postgres, which (unlike Render's free database) does not expire.
+# Deploy: create the Neon database first, then in the Render dashboard choose
+# New > Blueprint, pick this repository and branch, paste the Neon connection
+# string when asked for DATABASE_URL, and click Apply. See docs/DEPLOY.md.
 services:
   - type: web
     name: fitwaze
@@ -24,10 +19,9 @@ services:
       # Render's proxy appends the caller's address to X-Forwarded-For.
       - key: TRUSTED_PROXY_HOPS
         value: "1"
+      # Neon's connection string (postgresql://...neon.tech/...?sslmode=require).
       - key: DATABASE_URL
-        fromDatabase:
-          name: fitwaze-db
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       # 256-bit random value, base64-encoded: exactly what the AES-256 field
