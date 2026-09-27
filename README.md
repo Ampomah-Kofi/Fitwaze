@@ -146,6 +146,32 @@ The options list states which provider produced the routes, so a synthetic
 `mock` route is never mistaken for a real street. `POST /route/options` returns
 the same information in its `provider` field.
 
+### Everyday features
+
+- **Blood sugar before and after**: the morning check-in reading (encrypted) is
+  paired with the after-walk reading when the walk followed within 4 hours.
+  Progress shows the average change and a before/after chart over the
+  70-180 mg/dL target range; the care-team spreadsheet has both columns.
+- **Walk it again**: past routes starting within 300 m of today's start, same
+  activity, listed once with how often they were done (`POST /route/past`,
+  `POST /route/repeat`). A route longer than today's plan is not offered, so a
+  plan shortened for high blood sugar or tiredness still holds.
+- **Choose how long**: the check-in can ask for 10-60 minutes instead of the
+  suggested length; how the person is this morning can still shorten it.
+- **Saved the moment you finish**: Finish records the walk at once; how it felt
+  and blood sugar afterwards are an optional step after
+  (`POST /route/sessions/{id}/checkin`).
+- **Let someone know**: texts the emergency contact the walk, its start and
+  when to expect the person back.
+- **Low blood sugar 15-15 timer** in "Not feeling well?", with sound and voice.
+- **Achievements**: nine small milestones, each showing how close it is.
+- **Daily reminder** added to the phone's own calendar (`GET /reminder.ics`):
+  no push service or background worker needed.
+- **Español**: the whole app, including server advice and spoken alerts, in
+  Spanish; defaults to the phone's language.
+- **Sign-in**: stays signed in (refresh cookie), Sign out in the top bar,
+  Light/Dark/Auto appearance.
+
 ### Personalised route scoring
 
 Route scores are not the same for everyone. `terrain_emphasis()` in
