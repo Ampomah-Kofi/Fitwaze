@@ -817,15 +817,16 @@
   /* Walk a route again. */
   .past-routes { margin-top: 18px; }
   .past-routes h3 { font-size: 17px; margin: 0 0 10px; }
-  .past-route { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 10px;
+  .past-route { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px; margin-bottom: 10px;
     background: var(--card); border-radius: 16px; }
   .past-thumb { flex: none; width: 56px; height: 56px; border-radius: 12px; background: var(--fill); }
   .past-thumb path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
   .past-thumb circle { fill: #0a84ff; stroke: var(--card); stroke-width: 1.5; }
-  .past-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .past-info b { font-size: 15px; color: var(--ink); white-space: nowrap; }
+  .past-info { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .past-info b { font-size: 15px; color: var(--ink); }
   .past-info span { font-size: 13px; color: var(--muted); }
-  .past-route button { flex: none; width: auto; min-height: 36px; padding: 0 14px; margin: 0; font-size: 15px; }
+  /* Beside the details when there is room; its own full-width row when not. */
+  .past-route button { flex: 1 0 auto; width: auto; min-height: 40px; padding: 0 14px; margin: 0; font-size: 15px; }
 
 
   /* Let someone know; the 15-15 timer. */
@@ -857,9 +858,9 @@
   .reminder-card { margin-top: 18px; }
   .reminder-card h3 { margin: 0 0 4px; font-size: 17px; }
   .reminder-card p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
-  .reminder-row { display: flex; gap: 10px; align-items: center; }
-  .reminder-row input { margin: 0; flex: 0 0 148px; }
-  .reminder-row button { margin: 0; flex: 1; min-width: 0; white-space: nowrap; font-size: 15px; padding: 0 10px; }
+  .reminder-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .reminder-row input { margin: 0; flex: 1 0 140px; }
+  .reminder-row button { margin: 0; flex: 1 0 170px; font-size: 15px; padding: 8px 12px; }
 
 
   /* Language. */
@@ -883,6 +884,9 @@
   html[data-text="large"] #options-out, html[data-text="large"] #past-out, html[data-text="large"] #session-card,
   html[data-text="large"] .help-sheet, html[data-text="large"] #status, html[data-text="large"] .journey-alert { zoom: 1.18; }
   html[data-text="large"] #tabs button { font-size: 13px; }
+  /* Four choices in a row don't fit at the larger size: two rows of two. */
+  html[data-text="large"] #feeling-group { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-text="large"] .segmented button { padding-left: 4px; padding-right: 4px; font-size: 14px; }
 
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
@@ -1715,7 +1719,7 @@ const ES = {
 "Apple Maps: to turn-back point": "Apple Maps: hasta el punto de regreso",
 "At least 10 characters": "Al menos 10 caracteres",
 "At least 10 characters. A short sentence you'll remember works well.": "Al menos 10 caracteres. Una frase corta que recuerde funciona bien.",
-"Auto": "Automático",
+"Auto": "Auto",
 "Based on the abilities you shared, we're recommending cycling rather than walking.": "Según lo que nos contó, le recomendamos bicicleta en lugar de caminar.",
 "Be active 3 days in a row.": "Manténgase activo 3 días seguidos.",
 "Be active 7 days in a row.": "Manténgase activo 7 días seguidos.",
@@ -2151,7 +2155,7 @@ const ES_PATTERNS = [
   [/^on average after a walk \(1 walk\)$/, "en promedio después de caminar (1 caminata)"],
   [/^on average after a walk \((\d+) walks\)$/, "en promedio después de caminar ($1 caminatas)"],
   [/^on average after a walk\. Talk with your care team if this keeps happening\.$/, "en promedio después de caminar. Hable con su equipo médico si sigue pasando."],
-  [/^Done (\d+) times, last (.+)$/, "Hecha $1 veces, la última el $2"], [/^Last done (.+)$/, "Última vez: $1"],
+  [/^Done (\d+) times, last ([^·]+)$/, "Hecha $1 veces, la última el $2"], [/^Last done ([^·]+)$/, "Última vez: $1"],
   [/^Your walk has started$/, "Su caminata empezó"], [/^Your ride has started$/, "Su paseo empezó"],
   [/^Well done! Tap Finish to save your walk\.$/, "¡Muy bien! Toque Terminar para guardar su caminata."],
   [/^Well done! Tap Finish to save your ride\.$/, "¡Muy bien! Toque Terminar para guardar su paseo."],

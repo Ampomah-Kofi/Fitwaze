@@ -677,3 +677,10 @@ test('finishing with no signal keeps the walk and sends it when back online', as
   assert(Math.abs(sent.body.measured_minutes - 20) < 0.3);
   assert.equal(app.run('pendingInMemory.length'), 0);
 });
+
+test('Spanish translates each part of a "·" line, dates included', () => {
+  const app = setup();
+  app.run(`lang = 'es';`);
+  assert.equal(app.run(`tr('Last done 27 sept · felt easy')`), 'Última vez: 27 sept · se sintió fácil');
+  assert.equal(app.run(`tr('Done 3 times, last 27 sept · felt hard')`), 'Hecha 3 veces, la última el 27 sept · se sintió difícil');
+});
