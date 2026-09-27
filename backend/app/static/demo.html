@@ -2111,6 +2111,7 @@ function journeyAlert(kind, title, text) {
   playTones(TONES[kind] || TONES.start);
   try { if (soundOn && navigator.vibrate) navigator.vibrate(BUZZ[kind] || BUZZ.start); } catch (error) {}
   speak(title + ". " + text);
+  notifyIfAway(title, text);
   clearTimeout(alertTimer);
   alertTimer = setTimeout(() => { el("journey-alert").hidden = true; }, kind === "start" ? 5000 : 9000);
 }
@@ -2389,21 +2390,81 @@ function stopTracking() {
   if (simulationTimer !== null) { clearInterval(simulationTimer); simulationTimer = null; }
   // Remember when GPS tracking stopped (error, permission, pause, finish), so
   // the recorded time is the time actually tracked.
-  if (watchId !== null) { trackEndedAt = Date.now(); navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (watchId !== null) { trackEndedAt = Date.now(); endLocationWatch(watchId); watchId = null; }
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
   el("btn-track").textContent = session && session.simulated ? "Start simulation" : "Start activity";
   el("btn-recentre").hidden = true;
 }
 
+// --- Native app (Android / iPhone via Capacitor) -------------------------------
+// Inside the installed app, walks are followed by the native background
+// location plugin, which keeps tracking with the screen off (Android shows a
+// "walk in progress" notification while it does), and turn-back / arrival
+// alerts become phone notifications when the screen is off. In a browser
+// none of this exists and the web APIs are used as before.
+function nativePlugin(name) {
+  try {
+    const cap = window.Capacitor;
+    if (!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return null;
+    return (cap.Plugins && cap.Plugins[name]) || null;
+  } catch (error) { return null; }
+}
+
+function beginLocationWatch(onPosition, onFailure) {
+  const nativeGeo = nativePlugin("BackgroundGeolocation");
+  if (!nativeGeo) {
+    return navigator.geolocation.watchPosition(onPosition, onFailure,
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
+  }
+  const handle = { native: true, id: null, cancelled: false };
+  nativeGeo.addWatcher({
+    backgroundTitle: "Walk in progress",
+    backgroundMessage: "FitWaze is following your route and will tell you when to turn back.",
+    requestPermissions: true,
+    stale: false,
+    distanceFilter: 3,
+  }, (location, error) => {
+    if (error) { onFailure({ code: error.code === "NOT_AUTHORIZED" ? 1 : 2 }); return; }
+    if (location) onPosition({ coords: { latitude: location.latitude, longitude: location.longitude, accuracy: location.accuracy } });
+  }).then((id) => {
+    handle.id = id;
+    if (handle.cancelled) nativeGeo.removeWatcher({ id });
+  });
+  return handle;
+}
+
+function endLocationWatch(handle) {
+  if (handle && handle.native) {
+    handle.cancelled = true;
+    const nativeGeo = nativePlugin("BackgroundGeolocation");
+    if (nativeGeo && handle.id !== null) nativeGeo.removeWatcher({ id: handle.id });
+  } else if (navigator.geolocation) {
+    navigator.geolocation.clearWatch(handle);
+  }
+}
+
+function notifyIfAway(title, text) {
+  const notifications = nativePlugin("LocalNotifications");
+  if (!notifications || document.visibilityState === "visible") return;
+  try {
+    notifications.schedule({ notifications: [{ id: Math.floor(Date.now() % 2147483000), title, body: text }] });
+  } catch (error) { /* the in-app banner still shows */ }
+}
+
 // `resume` continues a walk paused by "Not feeling well?": same clock,
 // distance and trail, rather than starting again from zero.
 function startTracking(resume = false) {
   if (!session || session.status !== "selected") return;
-  if (!navigator.geolocation) { toast("This browser has no geolocation support.", true); return; }
-  if (!window.isSecureContext) {
+  const inApp = Boolean(nativePlugin("BackgroundGeolocation"));
+  if (!inApp && !navigator.geolocation) { toast("This browser has no geolocation support.", true); return; }
+  if (!inApp && !window.isSecureContext) {
     toast("Live tracking needs HTTPS or localhost.", true);
     return;
+  }
+  if (inApp) {
+    const notifications = nativePlugin("LocalNotifications");
+    if (notifications) notifications.requestPermissions().catch(() => {});
   }
 
   followMode = true;
@@ -2420,13 +2481,12 @@ function startTracking(resume = false) {
   }
   trackEndedAt = null;
 
-  watchId = navigator.geolocation.watchPosition(
+  watchId = beginLocationWatch(
     onFix,
     (error) => {
       toast(error.code === 1 ? "Location permission denied." : "Lost your position.", true);
       stopTracking();
-    },
-    { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+    }
   );
 
   el("track-out").hidden = false;

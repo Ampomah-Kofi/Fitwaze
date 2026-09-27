@@ -446,3 +446,32 @@ test('a walk where GPS never moved records time but not a 0-mile distance', () =
   assert(Math.abs(measured.measured_minutes - 8) < 0.2, 'time stops when tracking stopped');
   assert.equal(measured.measured_distance_m, undefined);
 });
+
+test('in the installed app, walks use native background location and alerts notify when away', async () => {
+  const app = setup();
+  app.run(`
+    document.visibilityState = 'visible';
+    globalThis.nativeCalls = [];
+    window.Capacitor = {isNativePlatform: () => true, Plugins: {
+      BackgroundGeolocation: {
+        addWatcher(options, callback) { nativeCalls.push(['addWatcher', options]); globalThis.nativeCallback = callback; return Promise.resolve('w1'); },
+        removeWatcher(args) { nativeCalls.push(['removeWatcher', args]); return Promise.resolve(); },
+      },
+      LocalNotifications: {
+        requestPermissions() { return Promise.resolve({display: 'granted'}); },
+        schedule(args) { nativeCalls.push(['schedule', args]); return Promise.resolve(); },
+      },
+    }};
+    session = {status: 'selected', distance_m: 1000, label: 'small_loop',
+      route_geometry: [[33.5186, -86.8104], [33.5231, -86.8104], [33.5186, -86.8104]]};
+    startTracking();`);
+  assert.equal(app.run('nativeCalls[0][0]'), 'addWatcher');
+  assert.match(app.run('nativeCalls[0][1].backgroundTitle'), /Walk in progress/);
+  await new Promise((resolve) => setImmediate(resolve));
+  app.run(`nativeCallback({latitude: 33.52, longitude: -86.8104, accuracy: 6});`);
+  assert.equal(app.run('JSON.stringify(lastFix)'), JSON.stringify([33.52, -86.8104]));
+  app.run(`document.visibilityState = 'hidden'; travelledMetres = 600; checkTurnaround([33.5231, -86.8104]);`);
+  assert.equal(app.run(`nativeCalls.filter((c) => c[0] === 'schedule').length`), 1);
+  app.run(`stopTracking();`);
+  assert.equal(app.run(`JSON.stringify(nativeCalls[nativeCalls.length - 1])`), JSON.stringify(['removeWatcher', {id: 'w1'}]));
+});

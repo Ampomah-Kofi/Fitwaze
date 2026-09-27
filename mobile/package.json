@@ -1,0 +1,20 @@
+{
+  "name": "fitwaze-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "FitWaze as an installable Android (and later iPhone) app: the web app plus background location and notifications.",
+  "scripts": {
+    "set-server": "node set-server.mjs",
+    "sync": "cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "1.2.26",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/local-notifications": "8.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}
