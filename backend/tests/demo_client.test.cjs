@@ -640,3 +640,40 @@ test('the check-in text to a contact is written in Spanish when Spanish is on', 
   await app.nodes.get('btn-tell').onclick();
   assert.match(decodeURIComponent(app.run('window.location.href')), /Voy a caminar 20 minutos/);
 });
+
+test('deleting the account sends the password and returns to sign-in', async () => {
+  const calls = [];
+  const app = setup(async (url, options) => { calls.push({url, body: JSON.parse(options.body)}); return {ok: true, status: 204, text: async () => ''}; });
+  app.run(`accessToken = 'token'; signedInUserId = 'u1';`);
+  app.nodes.get('delete-password').value = 'my long password';
+  app.nodes.get('btn-delete-account').closest = () => ({open: true});
+  await app.nodes.get('btn-delete-account').onclick();
+  assert.equal(calls[0].url, '/auth/delete-account');
+  assert.equal(calls[0].body.password, 'my long password');
+  assert.equal(app.run('accessToken'), null);
+  assert(app.nodes.get('screen-auth').classList.contains('active'));
+});
+
+test('finishing with no signal keeps the walk and sends it when back online', async () => {
+  let online = false;
+  const calls = [];
+  const app = setup(async (url, options) => {
+    calls.push({url, method: options.method, body: options.body ? JSON.parse(options.body) : null});
+    if (!online) throw new TypeError('Failed to fetch');
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: []});
+  });
+  app.run(`accessToken = 'token'; signedInUserId = 'u1';
+    session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};
+    trackStartedAt = Date.now() - 20 * 60000;`);
+  await app.nodes.get('btn-complete').onclick();
+  assert.equal(app.run('session.status'), 'completed');
+  assert.equal(app.run('pendingInMemory.length'), 1);
+  online = true;
+  calls.length = 0;
+  await app.run('flushPending()');
+  const sent = calls.find((c) => c.method === 'PATCH');
+  assert.equal(sent.url, '/route/sessions/s1');
+  assert.equal(sent.body.status, 'completed');
+  assert(Math.abs(sent.body.measured_minutes - 20) < 0.3);
+  assert.equal(app.run('pendingInMemory.length'), 0);
+});

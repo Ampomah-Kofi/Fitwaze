@@ -869,6 +869,21 @@
     background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; }
   .auth-lang button[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
 
+
+  /* Delete account. */
+  .delete-account { margin-top: 22px; padding: 14px 16px; border-radius: 16px; background: var(--card); }
+  .delete-account summary { cursor: pointer; color: var(--bad); font-weight: 600; font-size: 15px; }
+  .delete-account p { font-size: 14px; color: var(--muted); margin: 10px 0 12px; }
+  .delete-account button { width: 100%; }
+
+
+  /* Large text. */
+  .text-group { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-text="large"] #screen-auth, html[data-text="large"] #screen-today, html[data-text="large"] #screen-progress,
+  html[data-text="large"] #options-out, html[data-text="large"] #past-out, html[data-text="large"] #session-card,
+  html[data-text="large"] .help-sheet, html[data-text="large"] #status, html[data-text="large"] .journey-alert { zoom: 1.18; }
+  html[data-text="large"] #tabs button { font-size: 13px; }
+
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
      system dark colours. Only tokens change, plus the few places that
@@ -1283,6 +1298,11 @@
         <button type="button" data-lang-choice="en" aria-pressed="true">English</button>
         <button type="button" data-lang-choice="es" aria-pressed="false">Español</button>
       </div>
+      <label id="text-label" style="margin-top:18px">Text size</label>
+      <div class="segmented segmented-2 text-group" role="group" aria-labelledby="text-label">
+        <button type="button" data-text-choice="standard" aria-pressed="true">Standard</button>
+        <button type="button" data-text-choice="large" aria-pressed="false">Large</button>
+      </div>
       <label id="theme-label" style="margin-top:18px">Appearance</label>
       <div class="segmented segmented-3" id="theme-group" role="group" aria-labelledby="theme-label">
         <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
@@ -1290,6 +1310,14 @@
         <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
       </div>
       <button id="btn-signout" class="quiet signout">Sign out</button>
+      <details class="delete-account">
+        <summary>Delete my account</summary>
+        <p>This permanently erases your profile, check-ins, walks and blood sugar readings. It cannot be undone.
+          Download "Share with my care team" first if you want to keep a copy.</p>
+        <label for="delete-password">Your password, to confirm</label>
+        <input id="delete-password" type="password" autocomplete="current-password" />
+        <button id="btn-delete-account" class="danger" type="button">Delete everything</button>
+      </details>
       <p class="note">Map data &copy; OpenStreetMap contributors.</p>
     </section>
   </main>
@@ -1334,6 +1362,20 @@ function applyTheme(choice) {
   }
   try { localStorage.setItem("fitwaze-theme", choice); } catch (error) { /* private mode */ }
 }
+// Larger text for anyone who finds the standard size hard to read. The map
+// itself is left alone (scaling it would misplace taps); everything around it
+// grows.
+function applyTextSize(choice) {
+  const large = choice === "large";
+  document.documentElement.setAttribute("data-text", large ? "large" : "standard");
+  document.querySelectorAll("[data-text-choice]").forEach((button) =>
+    button.setAttribute("aria-pressed", String(button.dataset.textChoice === (large ? "large" : "standard"))));
+  try { localStorage.setItem("fitwaze-text", large ? "large" : "standard"); } catch (error) { /* private mode */ }
+}
+function savedTextSize() {
+  try { return localStorage.getItem("fitwaze-text") || "standard"; } catch (error) { return "standard"; }
+}
+
 function savedTheme() {
   try { return localStorage.getItem("fitwaze-theme") || "auto"; } catch (error) { return "auto"; }
 }
@@ -1734,7 +1776,12 @@ const ES = {
 "Emergency contact": "Contacto de emergencia",
 "End early": "Terminar antes",
 "End my walk": "Terminar mi caminata",
-"English": "English", "Home": "Casa",
+"English": "English", "Home": "Casa", "Text size": "Tamaño del texto", "Standard": "Normal", "Large": "Grande",
+"No signal. Your walk is kept on this phone and will be saved when you're back online.": "Sin señal. Su caminata se guarda en este teléfono y se enviará cuando vuelva la conexión.",
+"Your walk from earlier is now saved.": "Su caminata de antes ya está guardada.", "Delete my account": "Eliminar mi cuenta",
+"This permanently erases your profile, check-ins, walks and blood sugar readings. It cannot be undone. Download \"Share with my care team\" first if you want to keep a copy.": "Esto borra para siempre su perfil, registros, caminatas y lecturas de azúcar. No se puede deshacer. Descargue \"Compartir con mi equipo médico\" antes si quiere guardar una copia.",
+"Your password, to confirm": "Su contraseña, para confirmar", "Delete everything": "Borrar todo", "Enter your password to confirm.": "Escriba su contraseña para confirmar.",
+"Your account and all its data have been deleted.": "Su cuenta y todos sus datos fueron eliminados.", "That password is not right": "Esa contraseña no es correcta",
 "Enter another starting location": "Escribir otro punto de partida",
 "Enter latitude between -90 and 90 and longitude between -180 and 180.": "Escriba una latitud entre -90 y 90 y una longitud entre -180 y 180.",
 "Enter your blood sugar in the morning check-in, then again when you finish (“How did that feel?”). After a walk or two you'll see what walking does for your numbers here.": "Escriba su azúcar en el registro de la mañana y otra vez al terminar (“¿Cómo se sintió?”). Después de una o dos caminatas verá aquí lo que caminar hace por sus números.",
@@ -2107,6 +2154,7 @@ const ES_PATTERNS = [
   [/^Well done! Tap Finish to save your walk\.$/, "¡Muy bien! Toque Terminar para guardar su caminata."],
   [/^Well done! Tap Finish to save your ride\.$/, "¡Muy bien! Toque Terminar para guardar su paseo."],
   [/^Call (.+)$/, "Llamar a $1"],
+  [/^(\d+) walks from earlier are now saved\.$/, "$1 caminatas de antes ya están guardadas."],
   [/^(.+): (-?[\d.]+, -?[\d.]+) \(accurate to ~(\d+) m\)$/, (m, label, where, metres) => (trOne(label) || label) + ": " + where + " (precisión de ~" + metres + " m)"],
   [/^This route scores well because it ([^.]+)\.$/, (m, list) => "Esta ruta puntúa bien porque " + esFragments(list) + "."],
   [/^One tradeoff: it ([^.]+)\.$/, (m, part) => "Una desventaja: " + esFragments(part) + "."],
@@ -2304,6 +2352,7 @@ async function finishSignIn(data, greeting) {
   showScreen(session && session.status === "selected" ? "route" : "today");
   toast(greeting || "Signed in.");
   refreshProgress();
+  flushPending();
 }
 
 async function authenticate(mode) {
@@ -2361,6 +2410,25 @@ async function signOut() {
   toast("Signed out.");
 }
 el("btn-signout").onclick = busy(el("btn-signout"), signOut);
+
+el("btn-delete-account").onclick = busy(el("btn-delete-account"), async () => {
+  const password = el("delete-password").value;
+  if (!password) { toast("Enter your password to confirm.", true); return; }
+  try {
+    await api("/auth/delete-account", { method: "POST", body: { password: password } });
+  } catch (error) { toast(error.message, true); return; }
+  el("delete-password").value = "";
+  el("btn-delete-account").closest("details").open = false;
+  accessToken = null;
+  signedInUserId = null;
+  savedProfile = null;
+  resetForNewUser();
+  el("tabs").hidden = true;
+  el("btn-signout-top").hidden = true;
+  setAuthMode("register");
+  showScreen("auth");
+  toast("Your account and all its data have been deleted.");
+});
 el("btn-signout-top").onclick = busy(el("btn-signout-top"), signOut);
 
 el("btn-password").onclick = () => {
@@ -2928,7 +2996,21 @@ async function updateSession(status, extra) {
       renderSimulationProgress();
     } else {
       const keep = { label: session.label, weather: session.weather };
-      session = { ...(await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status, ...(extra || {}) } })), ...keep };
+      const body = { status: status, ...(extra || {}) };
+      try {
+        session = { ...(await api("/route/sessions/" + session.id, { method: "PATCH", body: body })), ...keep };
+      } catch (error) {
+        // No signal out on the walk: keep the finish on this phone and send
+        // it later, rather than losing the walk.
+        if (error.status || status !== "completed") throw error;
+        queueFinish(session.id, body);
+        session = { ...session, status: "completed" };
+        stopTracking();
+        renderSession();
+        toast("No signal. Your walk is kept on this phone and will be saved when you're back online.");
+        leaveJourney("completed");
+        return;
+      }
     }
     stopTracking();
     renderSession();
@@ -2945,6 +3027,45 @@ async function updateSession(status, extra) {
     leaveJourney(status);
   } catch (error) { toast(error.message, true); }
 }
+
+// --- Finishes waiting for a signal ----------------------------------------------
+const PENDING_KEY = "fitwaze-pending";
+function pendingFinishes() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); } catch (error) { return []; }
+}
+function storePending(list) {
+  try {
+    if (list.length) localStorage.setItem(PENDING_KEY, JSON.stringify(list));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch (error) { /* private mode: kept in this tab only */ }
+  pendingInMemory = list;
+}
+let pendingInMemory = [];
+function queueFinish(sessionId, body) {
+  const list = (pendingFinishes().length ? pendingFinishes() : pendingInMemory).filter((item) => item.id !== sessionId);
+  list.push({ id: sessionId, body: body, user: signedInUserId });
+  storePending(list);
+}
+async function flushPending() {
+  if (!accessToken) return;
+  const list = pendingFinishes().length ? pendingFinishes() : pendingInMemory;
+  if (!list.length) return;
+  const left = [];
+  let sent = 0;
+  for (const item of list) {
+    if (item.user && item.user !== signedInUserId) { left.push(item); continue; }  // someone else's walk
+    try {
+      await api("/route/sessions/" + item.id, { method: "PATCH", body: item.body });
+      sent++;
+    } catch (error) {
+      if (!error.status) left.push(item);  // still offline: try again later
+      // 409 (already saved) or 404: nothing more to do with it
+    }
+  }
+  storePending(left);
+  if (sent) { toast(sent === 1 ? "Your walk from earlier is now saved." : sent + " walks from earlier are now saved."); refreshProgress(); }
+}
+if (window.addEventListener) window.addEventListener("online", () => { flushPending(); });
 
 function leaveJourney(status) {
   clearInterval(lowTimer);
@@ -4005,6 +4126,10 @@ document.querySelectorAll("[data-theme-choice]").forEach((button) => {
   button.onclick = () => applyTheme(button.dataset.themeChoice);
 });
 applyTheme(savedTheme());
+document.querySelectorAll("[data-text-choice]").forEach((button) => {
+  button.onclick = () => applyTextSize(button.dataset.textChoice);
+});
+applyTextSize(savedTextSize());
 document.querySelectorAll("[data-lang-choice]").forEach((button) => {
   button.onclick = () => applyLanguage(button.dataset.langChoice);
 });
