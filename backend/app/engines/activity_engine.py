@@ -348,6 +348,15 @@ def recommend_activity(
     if checkin is not None:
         duration, checkin_notes = _apply_check_in(duration, checkin, profile.takes_glucose_lowering_medication)
         notes.extend(checkin_notes)
+    if profile.diabetes_status in (DiabetesStatusEnum.prediabetes, DiabetesStatusEnum.type2) or \
+            profile.goal in (GoalEnum.manage_prediabetes, GoalEnum.manage_type2):
+        # Short walks soon after eating blunt the post-meal glucose rise; in
+        # Reynolds et al. (Diabetologia, 2016) 10 minutes after each meal beat
+        # one 30-minute walk.
+        notes.append(
+            "Tip: a 10-minute walk within half an hour after a meal helps lower the blood sugar "
+            "rise that follows it. After dinner is a good time."
+        )
     if profile.takes_glucose_lowering_medication:
         notes.append(
             "Because you take insulin or a sulfonylurea, carry fast sugar (glucose tablets or "

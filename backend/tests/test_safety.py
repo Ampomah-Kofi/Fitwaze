@@ -174,3 +174,9 @@ def test_rate_limit_key_ignores_caller_written_forwarding_entries(monkeypatch):
     monkeypatch.setattr(rate_limit.get_settings(), "trusted_proxy_hops", 1)
     # The caller forged "6.6.6.6"; Render's proxy appended the real 203.0.113.9.
     assert rate_limit.client_ip(request("6.6.6.6, 203.0.113.9")) == "203.0.113.9"
+
+
+def test_people_with_diabetes_get_the_after_meal_walk_tip():
+    from app.models.enums import DiabetesStatusEnum
+    assert "after a meal" in recommend_activity(make_profile(diabetes_status=DiabetesStatusEnum.type2)).rationale
+    assert "after a meal" not in recommend_activity(make_profile()).rationale
