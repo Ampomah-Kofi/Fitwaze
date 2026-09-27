@@ -61,6 +61,23 @@ HIGH_GLUCOSE_MAX_MINUTES = 15
 TIRED_DURATION_FACTOR = 0.75
 
 
+# --- Adapting to recent walks -----------------------------------------------
+# Small, gradual steps: the usual advice is to build activity up slowly.
+PROGRESSION_STEP_FRACTION = 0.10   # add about 10% after comfortable walks...
+PROGRESSION_MIN_STEP = 2           # ...and at least 2 minutes
+PROGRESSION_HEADROOM = 10          # never more than 10 min above the profile band
+MAX_SESSION_MINUTES = 60
+HARD_REDUCTION_FACTOR = 0.85
+
+
+@dataclass
+class RecentActivity:
+    """One recent finished or abandoned session, newest first."""
+
+    status: str                 # "completed" or "abandoned"
+    effort: str | None = None   # "easy", "just_right", "hard" or None
+
+
 class ActivityUnavailableError(ValueError):
     """No requested walking/cycling activity is supported by this profile."""
 
@@ -253,10 +270,33 @@ def _apply_check_in(
     return duration_minutes, notes
 
 
+def _apply_recent_activity(
+    duration_minutes: int, band_high: int, recent: list[RecentActivity]
+) -> tuple[int, str | None]:
+    """Nudge today's length from how the last few sessions went."""
+    if not recent:
+        return duration_minutes, None
+    last = recent[0]
+    if last.status == "completed" and last.effort == "hard":
+        return max(_MIN_DURATION_MINUTES, round(duration_minutes * HARD_REDUCTION_FACTOR)), (
+            "Your last walk felt hard, so today's is a little shorter."
+        )
+    if last.status == "abandoned":
+        return duration_minutes, "Your last session ended early, so we're keeping today's the same length."
+    comfortable = [r for r in recent[:2] if r.status == "completed" and r.effort in ("easy", "just_right")]
+    if len(comfortable) == 2:
+        step = max(PROGRESSION_MIN_STEP, round(duration_minutes * PROGRESSION_STEP_FRACTION))
+        increased = min(duration_minutes + step, band_high + PROGRESSION_HEADROOM, MAX_SESSION_MINUTES)
+        if increased > duration_minutes:
+            return increased, "You've finished your last walks comfortably, so we've added a few minutes."
+    return duration_minutes, None
+
+
 def recommend_activity(
     profile: HealthProfileData,
     activity_type: ActivityTypeEnum | None = None,
     checkin: DailyCheckIn | None = None,
+    recent: list[RecentActivity] | None = None,
 ) -> ActivityRecommendationResult:
     foot_note = None
     if checkin is not None:
@@ -298,9 +338,10 @@ def recommend_activity(
         duration, band_low, band_high, profile.diabetes_status
     )
     duration, mobility_note = _apply_mobility_reduction(duration, profile.mobility_limitations)
+    duration, recent_note = _apply_recent_activity(duration, band_high, recent or [])
 
     notes = [activity_reason, band_reason]
-    for note in (goal_note, diabetes_note, mobility_note):
+    for note in (goal_note, diabetes_note, mobility_note, recent_note):
         if note:
             notes.append(note)
 

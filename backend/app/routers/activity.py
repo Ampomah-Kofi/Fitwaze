@@ -14,7 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.engines.activity_engine import DISCLAIMER, ActivityUnavailableError, recommend_activity
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import select
+
+from app.engines.activity_engine import DISCLAIMER, ActivityUnavailableError, RecentActivity, recommend_activity
+from app.models.enums import SessionStatusEnum
+from app.models.session import ActivitySession
 from app.models.activity import ActivityRecommendation
 from app.models.profile import HealthProfile, profile_to_data
 from app.models.user import User
@@ -23,6 +29,28 @@ from app.security.deps import get_current_user
 
 router = APIRouter(prefix="/activity", tags=["activity"])
 logger = logging.getLogger(__name__)
+
+
+RECENT_WINDOW_DAYS = 14
+
+
+def _recent_activity(db: Session, user_id) -> list[RecentActivity]:
+    """The caller's last few finished or abandoned sessions, newest first,
+    from the past two weeks: an older walk says little about today."""
+    since = datetime.now(timezone.utc) - timedelta(days=RECENT_WINDOW_DAYS)
+    rows = db.scalars(
+        select(ActivitySession)
+        .where(ActivitySession.user_id == user_id)
+        .where(ActivitySession.status.in_([SessionStatusEnum.completed, SessionStatusEnum.abandoned]))
+        .order_by(ActivitySession.created_at.desc())
+        .limit(3)
+    )
+    recent = []
+    for row in rows:
+        created = row.created_at if row.created_at.tzinfo else row.created_at.replace(tzinfo=timezone.utc)
+        if created >= since:
+            recent.append(RecentActivity(status=row.status.value, effort=row.effort))
+    return recent
 
 
 @router.post("/recommendation", response_model=ActivityRecommendationResponse)
@@ -44,6 +72,7 @@ def create_activity_recommendation(
             profile_data,
             payload.activity_type if payload else None,
             payload.checkin if payload else None,
+            _recent_activity(db, current_user.id),
         )
     except ActivityUnavailableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
