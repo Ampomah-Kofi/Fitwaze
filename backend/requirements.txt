@@ -3,6 +3,9 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 python-multipart==0.0.9
 
+# --- Time zones (Windows and slim Linux images have no system tz database) ---
+tzdata==2025.2
+
 # --- Validation / settings ---
 pydantic==2.9.2
 pydantic-settings==2.5.2

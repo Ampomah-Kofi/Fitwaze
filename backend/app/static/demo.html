@@ -1226,10 +1226,15 @@ function esc(value) {
 }
 
 let tokenRefresh = null;
+// The phone's time zone, so "today" and streaks follow local days.
+let TIME_ZONE = "";
+try { TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (error) {}
+
 async function authenticatedFetch(path, options = {}) {
   const sentToken = accessToken;
   const send = () => fetch(path, {...options, credentials: "same-origin", headers: {
     ...options.headers, ...(accessToken ? {Authorization: "Bearer " + accessToken} : {}),
+    ...(TIME_ZONE ? {"X-Timezone": TIME_ZONE} : {}),
   }});
   let response = await send();
   if (response.status !== 401 || path.startsWith("/auth/") || !sentToken) return response;

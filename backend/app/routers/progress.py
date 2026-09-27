@@ -10,7 +10,9 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -38,14 +40,23 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _zone(name: str | None):
+    """The caller's IANA time zone (sent by the app as X-Timezone), or UTC."""
+    if not name or len(name) > 64:
+        return timezone.utc
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return timezone.utc
+
+
 def _current_streak_days(completed_dates: set[date], today: date) -> int:
     """Consecutive days, ending today or yesterday, with >=1 completed
     session. Allowing the streak to end yesterday means it isn't broken
     simply because the user hasn't been out yet today.
 
-    Days are bucketed in UTC, so a session completed late in the evening west
-    of Greenwich counts towards the next calendar day. Fixing that properly
-    needs the user's timezone, which the profile does not collect."""
+    Days are the caller's local calendar days (see `_zone`), so an evening
+    walk in Alabama counts for that evening, not the next UTC day."""
     if today in completed_dates:
         cursor = today
     elif (today - timedelta(days=1)) in completed_dates:
@@ -64,7 +75,9 @@ def _current_streak_days(completed_dates: set[date], today: date) -> int:
 def get_progress(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    x_timezone: str | None = Header(default=None),
 ) -> ProgressResponse:
+    zone = _zone(x_timezone)
     # Session volume per user is small (one row per selected route), so the
     # aggregates are computed in Python rather than in SQL — this keeps the
     # naive/aware timestamp handling below in one place and dialect-agnostic.
@@ -91,7 +104,7 @@ def get_progress(
         if s.id in completed_at_utc and completed_at_utc[s.id] >= week_ago
     )
     streak = _current_streak_days(
-        {value.date() for value in completed_at_utc.values()}, now.date()
+        {value.astimezone(zone).date() for value in completed_at_utc.values()}, now.astimezone(zone).date()
     )
 
     profile = db.get(HealthProfile, current_user.id)
