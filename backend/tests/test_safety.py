@@ -91,6 +91,37 @@ def test_finishing_without_a_check_in_is_unchanged(client):
     assert body["status"] == "completed" and body["after_walk_advice"] is None
 
 
+def test_a_check_in_can_be_added_once_after_the_walk_is_saved(client):
+    saved = _completed_walk(client, measured_minutes=21.5)
+    assert saved.status_code == 200 and saved.json()["measured_minutes"] == 21.5
+    headers = saved.request.headers
+    url = f"/route/sessions/{saved.json()['id']}/checkin"
+    added = client.post(url, json={"effort": "easy", "post_glucose_value": 110, "post_glucose_unit": "mg/dL"},
+                        headers={"Authorization": headers["Authorization"]})
+    assert added.status_code == 200
+    body = added.json()
+    assert body["status"] == "completed" and body["effort"] == "easy" and body["after_walk_advice"]
+    assert body["measured_minutes"] == 21.5
+    again = client.post(url, json={"effort": "hard"}, headers={"Authorization": headers["Authorization"]})
+    assert again.status_code == 409
+
+
+def test_a_check_in_needs_a_finished_walk_of_your_own(client):
+    headers = auth_headers(register_and_login(client)["access_token"])
+    client.put("/profile", json=valid_profile_payload(), headers=headers)
+    rec = client.post("/activity/recommendation", headers=headers).json()
+    start = {"activity_recommendation_id": rec["id"], "latitude": 33.5186, "longitude": -86.8104}
+    option = client.post("/route/options", json=start, headers=headers).json()["options"][0]
+    session = client.post("/route/select", json={**start, "candidate_label": option["label"],
+                                                 "candidate_revision": option["candidate_revision"]}, headers=headers).json()
+    url = f"/route/sessions/{session['id']}/checkin"
+    assert client.post(url, json={"effort": "easy"}, headers=headers).status_code == 409
+    other = auth_headers(register_and_login(client, email="other@example.com")["access_token"])
+    assert client.post(url, json={"effort": "easy"}, headers=other).status_code == 404
+    client.patch(f"/route/sessions/{session['id']}", json={"status": "completed"}, headers=headers)
+    assert client.post(url, json={}, headers=headers).status_code == 422
+
+
 def test_implausible_after_walk_reading_is_rejected(client):
     assert _completed_walk(client, post_glucose_value=900, post_glucose_unit="mmol/L").status_code == 422
 

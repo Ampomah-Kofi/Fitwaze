@@ -54,6 +54,8 @@ class DailyCheckIn(BaseModel):
 class ActivityRecommendationRequest(BaseModel):
     activity_type: ActivityTypeEnum | None = None
     checkin: DailyCheckIn | None = None
+    # How long the person wants to go today, instead of the suggested length.
+    preferred_minutes: int | None = Field(default=None, ge=10, le=60)
 
 
 class ActivityRecommendationResponse(BaseModel):

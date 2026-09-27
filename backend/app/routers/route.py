@@ -36,6 +36,7 @@ from app.models.profile import HealthProfile, profile_to_data
 from app.models.session import ActivitySession
 from app.models.user import User
 from app.schemas.route import (
+    AfterWalkCheckIn,
     ExcludedRouteSchema,
     RouteOptionSchema,
     RouteOptionsRequest,
@@ -270,6 +271,14 @@ def get_route_session(
     )
 
 
+def _record_checkin(db: Session, session_row: ActivitySession, checkin: AfterWalkCheckIn, user_id) -> str:
+    session_row.effort = checkin.effort
+    glucose = checkin.post_glucose_mmol_l
+    session_row.post_glucose_mmol_l = f"{glucose:.2f}" if glucose is not None else None
+    profile = _profile_for(db, user_id)
+    return after_walk_advice(glucose, checkin.effort, bool(profile and profile.takes_glucose_lowering_medication))
+
+
 @router.patch("/sessions/{session_id}", response_model=RouteSessionResponse)
 def update_route_session(
     session_id: uuid.UUID,
@@ -298,13 +307,7 @@ def update_route_session(
                 round(payload.measured_distance_m, 1) if payload.measured_distance_m is not None else None
             )
         if payload.effort is not None or payload.post_glucose_value is not None:
-            session_row.effort = payload.effort
-            glucose = payload.post_glucose_mmol_l
-            session_row.post_glucose_mmol_l = f"{glucose:.2f}" if glucose is not None else None
-            profile = _profile_for(db, current_user.id)
-            advice = after_walk_advice(
-                glucose, payload.effort, bool(profile and profile.takes_glucose_lowering_medication)
-            )
+            advice = _record_checkin(db, session_row, payload, current_user.id)
     db.commit()
     db.refresh(session_row)
 
@@ -376,3 +379,29 @@ def download_route_gpx(
             "Content-Disposition": f'attachment; filename="fitwaze-{session_row.id}.gpx"'
         },
     )
+
+
+@router.post("/sessions/{session_id}/checkin", response_model=RouteSessionResponse)
+def add_after_walk_checkin(
+    session_id: uuid.UUID,
+    payload: AfterWalkCheckIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RouteSessionResponse:
+    """Add how it felt and blood sugar afterwards to a walk already saved as
+    completed. The walk is recorded the moment it is finished; this optional
+    step comes after, once, so the record cannot be rewritten later."""
+    session_row = _get_own_session(db, session_id, current_user.id)
+    if session_row.status != SessionStatusEnum.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only a finished walk can have a check-in")
+    if session_row.effort is not None or session_row.post_glucose_mmol_l is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This walk already has a check-in")
+    if payload.effort is None and payload.post_glucose_value is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nothing to add")
+    advice = _record_checkin(db, session_row, payload, current_user.id)
+    db.commit()
+    db.refresh(session_row)
+    logger.info("route_session_checkin user_id=%s session_id=%s", current_user.id, session_row.id)
+    response = RouteSessionResponse.model_validate(session_row)
+    response.after_walk_advice = advice
+    return response

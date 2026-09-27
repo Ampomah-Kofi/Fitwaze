@@ -73,6 +73,7 @@ def create_activity_recommendation(
             payload.activity_type if payload else None,
             payload.checkin if payload else None,
             _recent_activity(db, current_user.id),
+            payload.preferred_minutes if payload else None,
         )
     except ActivityUnavailableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

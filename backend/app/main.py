@@ -128,4 +128,6 @@ for _icon in sorted(APP_ICONS):
 def demo_page() -> FileResponse:
     if settings.environment.lower() == "production" or not DEMO_PAGE.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return FileResponse(DEMO_PAGE, media_type="text/html")
+    # Always check for a newer page: without this, phones keep showing the
+    # version from before a deploy.
+    return FileResponse(DEMO_PAGE, media_type="text/html", headers={"Cache-Control": "no-cache"})

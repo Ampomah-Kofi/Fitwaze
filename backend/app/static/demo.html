@@ -726,6 +726,7 @@
   main { scroll-padding-bottom: 96px; }
   .screen { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
   #tabs { position: relative; z-index: 800; }
+  .finish-saved { margin: 0 0 6px; font-weight: 600; font-size: 15px; color: var(--good-ink, var(--accent)); }
 
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
@@ -943,6 +944,16 @@
           <option value="walk">Walking</option>
           <option value="cycle">Cycling</option>
         </select>
+        <label for="minutes-choice">How long</label>
+        <select id="minutes-choice">
+          <option value="">Suggest a length for me</option>
+          <option value="10">10 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="20">20 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+        </select>
         <button id="btn-recommend">Get today's plan</button>
         <div id="recommendation-out"></div>
       </div>
@@ -994,6 +1005,7 @@
         </div>
       </div>
       <div id="finish-sheet" class="help-sheet finish-sheet" role="dialog" aria-labelledby="finish-title" hidden>
+        <p class="finish-saved">&#10003; Walk saved to your progress</p>
         <h3 id="finish-title">How did that feel?</h3>
         <div class="segmented segmented-3" id="effort-group" role="group" aria-label="How it felt">
           <button type="button" data-effort="easy" aria-pressed="false">Easy</button>
@@ -1005,7 +1017,7 @@
           <input id="post-glucose" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 110" />
           <select id="post-glucose-unit" aria-label="Blood sugar unit"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select>
         </div>
-        <button id="btn-save-walk">Save my walk</button>
+        <button id="btn-save-walk">Add to my walk</button>
         <button id="btn-skip-checkin" class="quiet">Skip</button>
       </div>
       <button id="btn-sheet-show" class="sheet-tab" hidden aria-label="Show walk details">&lsaquo;</button>
@@ -1077,6 +1089,12 @@
       <p class="note">Downloads a spreadsheet of your walks and rides (date, minutes, miles, calories, how it felt,
         blood sugar afterwards) that you can email or show to your doctor or nurse.</p>
       <button id="btn-progress" class="quiet" style="margin-top:12px">Refresh</button>
+      <label id="theme-label" style="margin-top:18px">Appearance</label>
+      <div class="segmented segmented-3" id="theme-group" role="group" aria-labelledby="theme-label">
+        <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+      </div>
       <p class="note">Map data &copy; OpenStreetMap contributors.</p>
     </section>
   </main>
@@ -1095,6 +1113,35 @@
 // The access token is held in a plain variable only, never localStorage, so it
 // does not outlive the tab and cannot be read back by anything else.
 let accessToken = null;
+
+// Appearance: follow the phone (Auto), or always Light / always Dark. The dark
+// colours live in one "prefers-color-scheme: dark" block; choosing a mode
+// switches that block on or off rather than duplicating it.
+const THEME_MEDIA = {auto: "(prefers-color-scheme: dark)", light: "not all", dark: "all"};
+function applyTheme(choice) {
+  if (!THEME_MEDIA[choice]) choice = "auto";
+  try {
+    for (const sheet of Array.from(document.styleSheets || [])) {
+      let rules;
+      try { rules = sheet.cssRules; } catch (error) { continue; }  // other sites' sheets
+      for (const rule of Array.from(rules || [])) {
+        // The one media block that holds the dark colour tokens.
+        if (rule.media && rule.cssText.indexOf("--glass-ink") !== -1) rule.media.mediaText = THEME_MEDIA[choice];
+      }
+    }
+  } catch (error) { /* keep the phone's setting */ }
+  document.documentElement.setAttribute("data-theme", choice);
+  const dark = choice === "dark" || (choice === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const meta = document.querySelector && document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", dark ? "#000000" : "#246347");
+  for (const button of document.querySelectorAll ? document.querySelectorAll("[data-theme-choice]") : []) {
+    button.setAttribute("aria-pressed", String(button.dataset.themeChoice === choice));
+  }
+  try { localStorage.setItem("fitwaze-theme", choice); } catch (error) { /* private mode */ }
+}
+function savedTheme() {
+  try { return localStorage.getItem("fitwaze-theme") || "auto"; } catch (error) { return "auto"; }
+}
 let signedInUserId = null;
 let recommendation = null;
 let savedProfile = null;
@@ -1496,7 +1543,8 @@ el("btn-recommend").onclick = busy(el("btn-recommend"), async () => {
   if (selectingRoute || (session && session.status === "selected")) { toast("Finish or abandon your current activity before starting another.", true); return; }
   try {
     recommendation = await api("/activity/recommendation", {
-      method: "POST", body: {activity_type: el("activity-choice").value || null, checkin: checkinPayload()},
+      method: "POST", body: {activity_type: el("activity-choice").value || null, checkin: checkinPayload(),
+        preferred_minutes: Number(el("minutes-choice").value) || null},
     });
     invalidateOptions();
     el("route-context").textContent = (ACTIVITY_NAMES[recommendation.activity_type] || recommendation.activity_type) +
@@ -1935,7 +1983,7 @@ function renderSession() {
   if (session.simulated) el("track-note").textContent = "Demo only: follows the selected route automatically. It does not use GPS or count as real exercise.";
 }
 
-async function updateSession(status, checkin) {
+async function updateSession(status, extra) {
   if (!session || session.status !== "selected") return;
   try {
     if (session.simulated) {
@@ -1944,42 +1992,54 @@ async function updateSession(status, checkin) {
       renderSimulationProgress();
     } else {
       const keep = { label: session.label, weather: session.weather };
-      session = { ...(await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status, ...(checkin || {}) } })), ...keep };
-    }
-    el("finish-sheet").hidden = true;
-    el("help-sheet").hidden = true;
-    el("btn-unwell").hidden = true;
-    el("after-walk-out").hidden = !session.after_walk_advice;
-    if (session.after_walk_advice) {
-      el("after-walk-out").innerHTML = "<h3>Walk saved</h3><p>" + esc(session.after_walk_advice) + "</p>";
+      session = { ...(await api("/route/sessions/" + session.id, { method: "PATCH", body: { status: status, ...(extra || {}) } })), ...keep };
     }
     stopTracking();
     renderSession();
-    el("back-home").hidden = true;
-    el("journey-alert").hidden = true;
-    setSheetHidden(false);
-    el("screen-route").classList.remove("is-journey");
-    showRoutePanel("map");
-    toast("Session " + status + ".");
-    refreshProgress();
-    if (status === "completed") showScreen("progress");
+    el("after-walk-out").hidden = true;
+    if (status === "completed" && !session.simulated) {
+      // Saved. Asking how it felt comes after, so the walk is never lost
+      // when someone closes the page instead of answering.
+      toast("Walk saved.");
+      refreshProgress();
+      el("help-sheet").hidden = true;
+      el("finish-sheet").hidden = false;
+      return;
+    }
+    leaveJourney(status);
   } catch (error) { toast(error.message, true); }
 }
 
+function leaveJourney(status) {
+  el("finish-sheet").hidden = true;
+  el("help-sheet").hidden = true;
+  el("btn-unwell").hidden = true;
+  el("back-home").hidden = true;
+  el("journey-alert").hidden = true;
+  setSheetHidden(false);
+  el("screen-route").classList.remove("is-journey");
+  showRoutePanel("map");
+  if (status !== "completed" || session.simulated) toast("Session " + status + ".");
+  refreshProgress();
+  if (status === "completed") showScreen("progress");
+}
+
 el("btn-complete").onclick = busy(el("btn-complete"), async () => {
-  if (session && !session.simulated && session.status === "selected") {
-    stopTracking();
-    el("finish-sheet").hidden = false;
-    return;
-  }
-  await updateSession("completed");
-});
-el("btn-save-walk").onclick = busy(el("btn-save-walk"), async () => {
-  await updateSession("completed", { ...finishCheckinPayload(), ...measuredPayload() });
-});
-el("btn-skip-checkin").onclick = busy(el("btn-skip-checkin"), async () => {
   await updateSession("completed", measuredPayload());
 });
+el("btn-save-walk").onclick = busy(el("btn-save-walk"), async () => {
+  if (!session || session.simulated) return;
+  try {
+    const keep = { label: session.label, weather: session.weather };
+    session = { ...(await api("/route/sessions/" + session.id + "/checkin", { method: "POST", body: finishCheckinPayload() })), ...keep };
+    if (session.after_walk_advice) {
+      el("after-walk-out").innerHTML = "<h3>Walk saved</h3><p>" + esc(session.after_walk_advice) + "</p>";
+      el("after-walk-out").hidden = false;
+    }
+    leaveJourney("completed");
+  } catch (error) { toast(error.message, true); }
+});
+el("btn-skip-checkin").onclick = () => leaveJourney("completed");
 el("btn-abandon").onclick = busy(el("btn-abandon"), () => updateSession("abandoned"));
 
 // --- Live tracking ---------------------------------------------------------
@@ -2841,6 +2901,11 @@ el("btn-install").onclick = async () => {
   el("install-card").hidden = true;
 };
 el("btn-install-close").onclick = () => { el("install-card").hidden = true; };
+
+document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+  button.onclick = () => applyTheme(button.dataset.themeChoice);
+});
+applyTheme(savedTheme());
 </script>
 </body>
 </html>

@@ -283,7 +283,8 @@ def _apply_recent_activity(
         )
     if last.status == "abandoned":
         return duration_minutes, "Your last session ended early, so we're keeping today's the same length."
-    comfortable = [r for r in recent[:2] if r.status == "completed" and r.effort in ("easy", "just_right")]
+    # A walk finished without saying how it felt still counts: it was completed.
+    comfortable = [r for r in recent[:2] if r.status == "completed" and r.effort in ("easy", "just_right", None)]
     if len(comfortable) == 2:
         step = max(PROGRESSION_MIN_STEP, round(duration_minutes * PROGRESSION_STEP_FRACTION))
         increased = min(duration_minutes + step, band_high + PROGRESSION_HEADROOM, MAX_SESSION_MINUTES)
@@ -297,6 +298,7 @@ def recommend_activity(
     activity_type: ActivityTypeEnum | None = None,
     checkin: DailyCheckIn | None = None,
     recent: list[RecentActivity] | None = None,
+    preferred_minutes: int | None = None,
 ) -> ActivityRecommendationResult:
     foot_note = None
     if checkin is not None:
@@ -340,8 +342,16 @@ def recommend_activity(
     duration, mobility_note = _apply_mobility_reduction(duration, profile.mobility_limitations)
     duration, recent_note = _apply_recent_activity(duration, band_high, recent or [])
 
+    choice_note = None
+    if preferred_minutes is not None:
+        # The person's own choice of length; how they are this morning (tired,
+        # high blood sugar) can still shorten it below.
+        preferred_minutes = max(_MIN_DURATION_MINUTES, min(preferred_minutes, MAX_SESSION_MINUTES))
+        choice_note = f"You chose {preferred_minutes} minutes today (we suggested {duration})."
+        duration = preferred_minutes
+
     notes = [activity_reason, band_reason]
-    for note in (goal_note, diabetes_note, mobility_note, recent_note):
+    for note in (goal_note, diabetes_note, mobility_note, recent_note, choice_note):
         if note:
             notes.append(note)
 

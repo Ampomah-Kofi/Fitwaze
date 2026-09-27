@@ -60,3 +60,22 @@ def test_the_api_uses_the_callers_own_history(client):
     other = auth_headers(register_and_login(client)["access_token"])
     client.put("/profile", json=valid_profile_payload(), headers=other)
     assert client.post("/activity/recommendation", headers=other).json()["duration_minutes"] == first
+
+
+def test_finished_walks_without_a_check_in_still_count():
+    finished = RecentActivity("completed", None)
+    assert _minutes([finished, finished]) > _minutes([])
+
+
+def test_the_person_can_choose_how_long():
+    result = recommend_activity(make_profile(), preferred_minutes=30)
+    assert result.duration_minutes == 30 and "You chose 30 minutes" in result.rationale
+    assert recommend_activity(make_profile(), preferred_minutes=500).duration_minutes == 60
+
+
+def test_the_chosen_length_is_sent_by_the_app(client):
+    headers = auth_headers(register_and_login(client)["access_token"])
+    client.put("/profile", json=valid_profile_payload(), headers=headers)
+    chosen = client.post("/activity/recommendation", json={"preferred_minutes": 25}, headers=headers)
+    assert chosen.status_code == 200 and chosen.json()["duration_minutes"] == 25
+    assert client.post("/activity/recommendation", json={"preferred_minutes": 5}, headers=headers).status_code == 422

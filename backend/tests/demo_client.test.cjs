@@ -294,25 +294,46 @@ test('"Not feeling well?" stops the walk and offers to call the emergency contac
   assert.equal(app.run('watchId'), 7, 'tracking resumed');
 });
 
-test('finishing a real walk asks how it felt and sends the check-in', async () => {
+test('finishing a real walk saves it at once, then asks how it felt', async () => {
   const requests = [];
   const app = setup(async (url, options) => {
-    requests.push({url, body: JSON.parse(options.body)});
+    requests.push({url, method: options.method, body: options.body ? JSON.parse(options.body) : null});
     return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: [],
-      after_walk_advice: 'Your blood sugar is in a good range after your activity.'});
+      after_walk_advice: url.endsWith('/checkin') ? 'Your blood sugar is in a good range after your activity.' : null});
   });
   app.nodes.get('finish-sheet').hidden = true;
   app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};`);
   await app.nodes.get('btn-complete').onclick();
+  const saved = requests.find((r) => r.method === 'PATCH');
+  assert(saved, 'the walk is saved as soon as Finish is tapped');
+  assert.equal(saved.url, '/route/sessions/s1');
+  assert.equal(saved.body.status, 'completed');
   assert.equal(app.nodes.get('finish-sheet').hidden, false);
-  assert.equal(requests.length, 0, 'nothing saved until the check-in is answered');
   app.run(`effortChoice = 'hard';`);
   app.nodes.get('post-glucose').value = '118';
   app.nodes.get('post-glucose-unit').value = 'mg/dL';
   await app.nodes.get('btn-save-walk').onclick();
-  assert.deepEqual({...requests[0].body}, {status: 'completed', effort: 'hard', post_glucose_unit: 'mg/dL', post_glucose_value: 118});
+  const checkin = requests.find((r) => r.url.endsWith('/checkin'));
+  assert.equal(checkin.url, '/route/sessions/s1/checkin');
+  assert.deepEqual({...checkin.body}, {effort: 'hard', post_glucose_unit: 'mg/dL', post_glucose_value: 118});
+  assert.equal(app.nodes.get('finish-sheet').hidden, true);
   assert.equal(app.nodes.get('after-walk-out').hidden, false);
   assert.match(app.nodes.get('after-walk-out').innerHTML, /good range/);
+});
+
+test('skipping the after-walk questions keeps the walk saved', async () => {
+  const requests = [];
+  const app = setup(async (url, options) => {
+    requests.push({url, method: options.method});
+    return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: []});
+  });
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};`);
+  await app.nodes.get('btn-complete').onclick();
+  const before = requests.filter((r) => r.method === 'PATCH').length;
+  await app.nodes.get('btn-skip-checkin').onclick();
+  assert.equal(before, 1);
+  assert.equal(requests.filter((r) => r.method === 'PATCH').length, 1, 'skip sends nothing more');
+  assert.equal(app.nodes.get('finish-sheet').hidden, true);
 });
 
 test('route options show the heat check', async () => {
@@ -425,7 +446,7 @@ test('continuing after "Not feeling well?" keeps the time and distance', () => {
 test('saving a tracked walk sends what the phone measured', async () => {
   const requests = [];
   const app = setup(async (url, options) => {
-    requests.push(JSON.parse(options.body));
+    if (options.method === 'PATCH') requests.push(JSON.parse(options.body));
     return response({id: 's1', status: 'completed', distance_m: 1000, estimated_minutes: 12, route_geometry: []});
   });
   app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};
