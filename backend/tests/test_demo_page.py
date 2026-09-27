@@ -39,3 +39,27 @@ def test_refresh_cookie_is_https_only_when_hosted(monkeypatch, environment, secu
 
     monkeypatch.setattr(auth.settings, "environment", environment)
     assert auth._cookie_secure() is secure
+
+
+def test_app_can_be_installed_to_the_home_screen(client):
+    manifest = client.get("/manifest.webmanifest")
+    assert manifest.status_code == 200
+    body = manifest.json()
+    assert body["display"] == "standalone" and body["start_url"] == "/"
+    for icon in body["icons"]:
+        response = client.get(icon["src"])
+        assert response.status_code == 200 and response.headers["content-type"] == "image/png"
+    assert client.get("/icon-180.png").content.startswith(b"\x89PNG")
+    page = client.get("/").text
+    assert 'rel="manifest"' in page and 'rel="apple-touch-icon"' in page
+
+
+def test_only_the_icons_are_served_from_the_static_folder(client):
+    assert client.get("/demo.html").status_code == 404
+    assert client.get("/demo").status_code == 200
+
+
+def test_install_files_are_not_exposed_in_production(client, monkeypatch):
+    monkeypatch.setattr(main.settings, "environment", "production")
+    assert client.get("/manifest.webmanifest").status_code == 404
+    assert client.get("/icon-192.png").status_code == 404

@@ -3,7 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#193e32" />
+<meta name="theme-color" content="#246347" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icon-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="FitWaze" />
 <title>FitWaze — Move your way</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -488,6 +494,14 @@
   .plan-headline b { font-size: 40px; font-weight: 700; color: var(--accent); }
   .plan.hold { background: #ff3b3012; }
   .plan #btn-goroute { margin: 6px 0 14px; }
+  .install-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; position: relative; }
+  .install-card[hidden] { display: none; }
+  .install-card img { border-radius: 12px; flex: none; }
+  .install-card b { display: block; font-size: 15px; }
+  .install-card p { margin: 2px 0 0; font-size: 13px; }
+  .install-card #btn-install { width: auto; min-height: 36px; padding: 6px 14px; margin: 0; font-size: 15px; flex: none; }
+  .install-close { position: absolute; top: 6px; right: 6px; width: 28px; min-height: 28px; height: 28px; padding: 0;
+    margin: 0; border-radius: 50%; background: var(--fill); color: var(--muted); font-size: 18px; line-height: 1; }
   .ring-card { display: flex; align-items: center; gap: 18px; }
   .ring-card:empty { display: none; }
   .ring-wrap { position: relative; flex: none; width: 128px; height: 128px; }
@@ -767,6 +781,15 @@
         <span class="eyebrow" id="today-date">Today</span>
         <h2 id="today-greeting">Your day, your pace.</h2>
         <p>Check in, get today's plan, and find a walk near home.</p>
+      </div>
+      <div id="install-card" class="card install-card" hidden>
+        <img src="/icon-180.png" alt="" width="52" height="52" />
+        <div>
+          <b>Put FitWaze on your home screen</b>
+          <p id="install-how">Open it like an app, full screen.</p>
+        </div>
+        <button id="btn-install" class="ghost" hidden>Install</button>
+        <button id="btn-install-close" class="install-close" aria-label="Not now">&times;</button>
       </div>
       <div class="profile-layout">
       <details class="profile-editor" id="profile-editor" open>
@@ -1346,6 +1369,7 @@ async function authenticate(path) {
       if (error.status !== 404) toast("Signed in, but your saved profile could not be loaded. " + error.message, true);
     }
     await loadHome();
+    offerInstall();
     el("account-state").textContent = "Signed in as " + data.user.email;
     el("tabs").hidden = false;
     showScreen(session && session.status === "selected" ? "route" : "today");
@@ -2629,6 +2653,43 @@ function renderGreeting(now = new Date()) {
   } catch (error) { el("today-date").textContent = "Today"; }
 }
 renderGreeting();
+
+// --- Install to the home screen --------------------------------------------------
+// Installed, FitWaze opens full screen with no browser bars. Android/Chrome
+// offers a real install prompt; on iPhone it is Share, then Add to Home Screen.
+let installPrompt = null;
+function isInstalled() {
+  try {
+    return Boolean((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone);
+  } catch (error) { return false; }
+}
+function offerInstall() {
+  if (isInstalled()) return;
+  if (installPrompt) {
+    el("install-how").textContent = "Open it like an app, full screen.";
+    el("btn-install").hidden = false;
+    el("install-card").hidden = false;
+  } else if (IS_IOS) {
+    el("install-how").textContent = "In Safari, tap Share, then Add to Home Screen.";
+    el("btn-install").hidden = true;
+    el("install-card").hidden = false;
+  }
+}
+if (window.addEventListener) {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPrompt = event;
+    offerInstall();
+  });
+}
+el("btn-install").onclick = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  try { await installPrompt.userChoice; } catch (error) {}
+  installPrompt = null;
+  el("install-card").hidden = true;
+};
+el("btn-install-close").onclick = () => { el("install-card").hidden = true; };
 </script>
 </body>
 </html>

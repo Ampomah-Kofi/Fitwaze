@@ -32,6 +32,17 @@ On a phone, standing somewhere in Alabama:
 If routes fail, open the service's **Logs** in Render and look for
 `osrm_request_failed` or `elevation_lookup_failed`.
 
+## Put it on the home screen
+
+Once testers open the link, FitWaze can be installed like an app, so it
+opens full screen with its own icon and no browser bars:
+
+- **iPhone (Safari):** tap Share, then **Add to Home Screen**.
+- **Android (Chrome):** tap **Install** on the card in the app, or use the
+  browser menu's **Install app**.
+
+The app shows a card with these steps after sign-in until it is installed.
+
 ## What runs where
 
 | Piece | Pilot default | Limits |
