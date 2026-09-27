@@ -428,6 +428,9 @@
     --accent-tint: #248a3d1f;
     --blue: #007aff; --good: #248a3d; --warn: #c93400; --bad: #d70015;
     --fill: #7676801f;          /* iOS tertiary fill */
+    --bar: rgba(249, 249, 249, .84);   /* translucent navigation and tab bars */
+    --raised: #ffffff;                 /* selected segment, focused field */
+    --good-ink: #1f7a35; --warn-ink: #9a4a00;
     --radius: 14px;
   }
   body { background: #e9e9ee; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
@@ -436,7 +439,7 @@
   .num, .stat b, .plan-headline b, .option .score, #track-out .stat b { font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif; }
 
   /* Navigation bar: translucent, hairline separator. */
-  #appbar { background: rgba(249, 249, 249, .82); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  #appbar { background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
     border-bottom: .5px solid rgba(60, 60, 67, .29); padding: max(10px, env(safe-area-inset-top)) 20px 10px; }
   #appbar h1 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
   .brand-mark { width: 28px; height: 28px; }
@@ -466,7 +469,7 @@
   /* Form controls. */
   label { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
   input, select { background: var(--fill); border: 0; border-radius: 10px; min-height: 44px; font-size: 17px; margin-bottom: 14px; color: var(--ink); }
-  input:focus, select:focus { box-shadow: 0 0 0 3px #007aff40; background: #fff; }
+  input:focus, select:focus { box-shadow: 0 0 0 3px #007aff40; background: var(--raised); }
   select { -webkit-appearance: none; appearance: none; padding-right: 34px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%238e8e93' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 12px center; }
@@ -486,8 +489,8 @@
   .segmented button, .mobile-route-switch button { background: transparent; border: 0; color: var(--ink); min-height: 36px;
     font-size: 14px; font-weight: 500; border-radius: 7px; margin: 0; box-shadow: none; }
   .segmented button[aria-pressed="true"], .mobile-route-switch button[aria-pressed="true"] {
-    background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 3px 8px #0000001f, 0 3px 1px #0000000a; }
-  .segmented button[data-feeling="unwell"][aria-pressed="true"] { background: #fff; color: var(--bad); }
+    background: var(--raised); color: var(--ink); font-weight: 600; box-shadow: 0 3px 8px #0000001f, 0 3px 1px #0000000a; }
+  .segmented button[data-feeling="unwell"][aria-pressed="true"] { background: var(--raised); color: var(--bad); }
 
   /* Plan and hold. */
   .plan { border: 0; background: var(--bg); border-radius: 12px; }
@@ -556,7 +559,7 @@
   .stat span { color: var(--muted); }
 
   /* Tab bar: translucent, tinted icon for the current tab. */
-  #tabs { background: rgba(249, 249, 249, .86); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  #tabs { background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
     border-top: .5px solid rgba(60, 60, 67, .29); padding: 6px 12px max(8px, env(safe-area-inset-bottom)); gap: 0; }
   #tabs button { min-height: 0; padding: 4px; font-size: 10px; font-weight: 500; color: #8e8e93; background: none; border-radius: 0; }
   #tabs button[aria-current="page"] { background: none; color: var(--accent); }
@@ -678,7 +681,7 @@
   .finish-sheet input, .finish-sheet select { background: var(--glass-fill); color: var(--glass-ink); }
   .finish-sheet .segmented { background: var(--glass-fill); }
   .finish-sheet .segmented button { color: var(--glass-ink); }
-  .finish-sheet .segmented button[aria-pressed="true"] { background: #fff; color: #1c1c1e; box-shadow: 0 3px 8px #0000001f; }
+  .finish-sheet .segmented button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 3px 8px #0000001f; }
   .finish-sheet button.quiet { background: var(--glass-fill); color: var(--glass-ink); margin-top: 8px; }
   .segmented-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @keyframes sheet-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
@@ -723,6 +726,54 @@
   main { scroll-padding-bottom: 96px; }
   .screen { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
   #tabs { position: relative; z-index: 800; }
+
+  /* ======================================================================
+     Dark mode, following the phone's setting like Apple's own apps: iOS
+     system dark colours. Only tokens change, plus the few places that
+     tint text for meaning.
+     ====================================================================== */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --ink: #ffffff; --muted: #98989f; --line: #38383a; --bg: #000000; --card: #1c1c1e;
+      --fill: rgba(118, 118, 128, .24); --bar: rgba(22, 22, 24, .82); --raised: #636366;
+      --accent: #30d158; --accent-tint: rgba(48, 209, 88, .18); --blue: #0a84ff;
+      --good: #30d158; --warn: #ff9f0a; --bad: #ff453a; --good-ink: #30d158; --warn-ink: #ffb340;
+      --glass: rgba(28, 28, 30, .74); --glass-strong: rgba(28, 28, 30, .88); --glass-line: rgba(255, 255, 255, .1);
+      --glass-fill: rgba(118, 118, 128, .28); --glass-ink: #ffffff; --glass-muted: rgba(235, 235, 245, .6);
+    }
+    body { background: #000; }
+    button { color: #000; }
+    button.ghost, button.quiet, button.danger, #tabs button, .segmented button, .mobile-route-switch button,
+    .sheet-hide, .install-close, .password-field button, .locate-fab, .map-fab { color: inherit; }
+    button.ghost { color: var(--accent); }
+    button.danger { color: var(--bad); }
+    #screen-route.is-journey #session-card button.ghost { background: rgba(48, 209, 88, .2); color: #30d158; }
+    #screen-route.is-journey #session-card button.danger { background: rgba(255, 69, 58, .2); color: #ff6961; }
+    #screen-route.is-journey .back-home { background: rgba(48, 209, 88, .2); color: #30d158; }
+    .journey-alert { color: #000; }
+    #tabs button { color: #8e8e93; }
+    #tabs button[aria-current="page"] { color: var(--accent); }
+    #btn-locate { background: rgba(10, 132, 255, .2); color: #409cff; }
+    .chip { color: #d1d1d6; }
+    .chip.good, .banner.real, .weather-card.ok, .after-walk h3, .back-home { color: var(--good-ink); }
+    .chip.warn, .banner.mock, .weather-card.caution, .weather-card.cold, .weather-card.extreme_caution { color: var(--warn-ink); }
+    .weather-card.danger { color: #ff6961; }
+    .plan.hold h3 { color: #ff6961; }
+    .help-btn { color: #000; }
+    .help-btn.danger-btn, .unwell-fab { color: #fff; }
+    .journey-alert.turn { color: #000; }
+    .switch { background: #39393d !important; }
+    .switch:checked { background: #30d158 !important; }
+    .ring-track { stroke: rgba(48, 209, 88, .22); }
+    .ring-fill { stroke: #30d158; }
+    .ring-text .streak { color: #ffb340; }
+    .list-icon { background: rgba(48, 209, 88, .2); }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%2398989f' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); }
+    .leaflet-bar a { background: #2c2c2e; color: #fff; border-color: #38383a; }
+    .leaflet-control-attribution { background: rgba(28, 28, 30, .7) !important; color: #98989f; }
+    .leaflet-control-attribution a { color: #409cff; }
+  }
 
   /* Someone who has asked their OS for less motion gets none of it. */
   @media (prefers-reduced-motion: reduce) {
