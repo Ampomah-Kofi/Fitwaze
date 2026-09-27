@@ -16,7 +16,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 session_status_enum = postgresql.ENUM(
-    "offered", "selected", "completed", "abandoned", name="session_status_enum"
+    "offered", "selected", "completed", "abandoned", name="session_status_enum", create_type=False
 )
 
 
