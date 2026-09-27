@@ -36,3 +36,17 @@ def estimate_calories(activity_type: ActivityTypeEnum, minutes: float, weight_kg
     if distance_m:
         speed = (distance_m / 1000) / (minutes / 60) * _MPH_PER_KMH
     return round(met_for(activity_type, speed) * weight_kg * minutes / 60)
+
+
+# Walking step length is about 41.5% of height on average (a widely used
+# pedometer rule of thumb); without a height, a typical adult 0.7 m.
+STEP_LENGTH_PER_HEIGHT = 0.415
+DEFAULT_STEP_M = 0.7
+
+
+def estimate_steps(activity_type: ActivityTypeEnum, distance_m: float | None, height_cm: float | None) -> int | None:
+    """Rounded steps for a walk, or None for rides (no steps to count)."""
+    if activity_type != ActivityTypeEnum.walk or not distance_m or distance_m <= 0:
+        return None
+    step_m = height_cm * STEP_LENGTH_PER_HEIGHT / 100 if height_cm else DEFAULT_STEP_M
+    return round(distance_m / step_m)

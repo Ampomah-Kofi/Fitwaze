@@ -26,6 +26,8 @@ class ProgressSessionSummary(BaseModel):
     completed_at: datetime | None = None
     # Estimated from METs and the saved body weight; None without a profile.
     calories: int | None = None
+    # Estimated from distance and height; walks only.
+    steps: int | None = None
     # True when minutes/distance are what GPS measured, not the plan.
     measured: bool = False
 
@@ -59,6 +61,7 @@ class ProgressResponse(BaseModel):
     last_7_days_minutes: int
     current_streak_days: int
     total_calories: int | None = None
+    total_steps: int = 0
     recent_sessions: list[ProgressSessionSummary]
     # Walks with a reading before and after, oldest first (the latest few).
     glucose_walks: list[GlucoseWalk] = []

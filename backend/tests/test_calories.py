@@ -82,8 +82,16 @@ def test_care_team_export_is_the_callers_own_activity(client):
     rows = list(csv.reader(io.StringIO(response.text)))
     assert rows[0][0] == "Date" and len(rows) == 2
     assert rows[1][1:4] == ["Walk", "22", "1.12"]
-    assert rows[1][5:] == ["yes", "just right", "", "126"]
+    assert rows[0][5] == "Steps (estimate)" and int(rows[1][5]) > 2000  # 1.8 km of walking
+    assert rows[1][6:] == ["yes", "just right", "", "126"]
 
     other = auth_headers(register_and_login(client)["access_token"])
     assert len(list(csv.reader(io.StringIO(client.get("/progress/export.csv", headers=other).text)))) == 1
     assert client.get("/progress/export.csv").status_code == 401
+
+
+def test_steps_come_from_distance_and_height():
+    from app.engines.calories import estimate_steps
+    assert estimate_steps(ActivityTypeEnum.walk, 1609.344, 170) == round(1609.344 / (1.70 * 0.415))
+    assert estimate_steps(ActivityTypeEnum.walk, 700, None) == 1000
+    assert estimate_steps(ActivityTypeEnum.cycle, 5000, 170) is None

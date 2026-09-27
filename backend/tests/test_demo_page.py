@@ -69,3 +69,12 @@ def test_install_files_are_not_exposed_in_production(client, monkeypatch):
     monkeypatch.setattr(main.settings, "environment", "production")
     assert client.get("/manifest.webmanifest").status_code == 404
     assert client.get("/icon-192.png").status_code == 404
+
+
+def test_service_worker_is_served_and_never_caches_the_api(client):
+    response = client.get("/sw.js")
+    assert response.status_code == 200 and "javascript" in response.headers["content-type"]
+    assert response.headers["cache-control"] == "no-cache"
+    body = response.text
+    assert "API calls: always the network, never stored" in body
+    assert 'request.method !== "GET"' in body

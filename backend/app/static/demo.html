@@ -1487,6 +1487,8 @@ function initMap() {
   // provider or self-hosted tiles.
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
+    // CORS tiles can be kept by the service worker for use without signal.
+    crossOrigin: true,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
   routeLayer = L.layerGroup().addTo(map);
@@ -1776,7 +1778,7 @@ const ES = {
 "Emergency contact": "Contacto de emergencia",
 "End early": "Terminar antes",
 "End my walk": "Terminar mi caminata",
-"English": "English", "Home": "Casa", "Text size": "Tamaño del texto", "Standard": "Normal", "Large": "Grande",
+"English": "English", "Home": "Casa", "steps (estimate)": "pasos (estimado)", "Text size": "Tamaño del texto", "Standard": "Normal", "Large": "Grande",
 "No signal. Your walk is kept on this phone and will be saved when you're back online.": "Sin señal. Su caminata se guarda en este teléfono y se enviará cuando vuelva la conexión.",
 "Your walk from earlier is now saved.": "Su caminata de antes ya está guardada.", "Delete my account": "Eliminar mi cuenta",
 "This permanently erases your profile, check-ins, walks and blood sugar readings. It cannot be undone. Download \"Share with my care team\" first if you want to keep a copy.": "Esto borra para siempre su perfil, registros, caminatas y lecturas de azúcar. No se puede deshacer. Descargue \"Compartir con mi equipo médico\" antes si quiere guardar una copia.",
@@ -2154,6 +2156,7 @@ const ES_PATTERNS = [
   [/^Well done! Tap Finish to save your walk\.$/, "¡Muy bien! Toque Terminar para guardar su caminata."],
   [/^Well done! Tap Finish to save your ride\.$/, "¡Muy bien! Toque Terminar para guardar su paseo."],
   [/^Call (.+)$/, "Llamar a $1"],
+  [/^([\d,]+) steps$/, "$1 pasos"],
   [/^(\d+) walks from earlier are now saved\.$/, "$1 caminatas de antes ya están guardadas."],
   [/^(.+): (-?[\d.]+, -?[\d.]+) \(accurate to ~(\d+) m\)$/, (m, label, where, metres) => (trOne(label) || label) + ": " + where + " (precisión de ~" + metres + " m)"],
   [/^This route scores well because it ([^.]+)\.$/, (m, list) => "Esta ruta puntúa bien porque " + esFragments(list) + "."],
@@ -3944,7 +3947,8 @@ function recentList(sessions) {
     return '<div class="list-row"><span class="list-icon">' + (item.activity_type === "cycle" ? "🚲" : "🚶") + "</span>" +
       "<span class=\"list-main\"><b>" + (item.activity_type === "cycle" ? "Ride" : "Walk") + "</b><small>" + esc(day) + "</small></span>" +
       "<span class=\"list-value\">" + esc(item.estimated_minutes) + " min · " + distanceText(item.distance_m) + " " + UNIT +
-      (typeof item.calories === "number" ? " · " + esc(item.calories) + " cal" : "") + "</span></div>";
+      (typeof item.steps === "number" ? " · " + esc(item.steps.toLocaleString("en-US")) + " steps"
+        : typeof item.calories === "number" ? " · " + esc(item.calories) + " cal" : "") + "</span></div>";
   }).join("") + "</div>";
 }
 
@@ -4029,10 +4033,12 @@ async function refreshProgress() {
     el("progress-out").innerHTML =
       stat(progress.sessions_completed, progress.sessions_completed === 1 ? "activity done" : "activities done") +
       stat(distanceText(progress.total_distance_m) + " " + UNIT, "distance covered") +
+      (progress.total_steps ? stat(progress.total_steps.toLocaleString("en-US"), "steps (estimate)") : "") +
       stat(progress.total_active_minutes, "active minutes in all") +
       (typeof progress.total_calories === "number"
         ? stat(progress.total_calories.toLocaleString("en-US"), "calories burned (estimate)")
-        : stat(Math.round(progress.completion_rate * 100) + "%", "of started routes finished"));
+        : "") +
+      stat(Math.round(progress.completion_rate * 100) + "%", "of started routes finished");
     el("recent-out").innerHTML = recentList(progress.recent_sessions || []);
     el("glucose-card").innerHTML = glucoseCard(progress.glucose_walks || [], progress.average_glucose_change_mg_dl);
     el("glucose-card").hidden = false;
@@ -4135,6 +4141,10 @@ document.querySelectorAll("[data-lang-choice]").forEach((button) => {
 });
 applyLanguage(savedLanguage());
 if (/^https?:$/.test((window.location && window.location.protocol) || "")) resumeSignIn();
+// Offline support (see /sw.js). Service workers need HTTPS or localhost.
+try {
+  if (navigator.serviceWorker && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
+} catch (error) { /* not supported: the app works online as before */ }
 </script>
 </body>
 </html>

@@ -124,6 +124,16 @@ for _icon in sorted(APP_ICONS):
     _icon_route(_icon)
 
 
+@app.get("/sw.js", include_in_schema=False)
+def service_worker() -> FileResponse:
+    """Keeps the app and recently seen map tiles on the phone for weak signal.
+    Served from the root so it can look after the whole app."""
+    if settings.environment.lower() == "production":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return FileResponse(STATIC_DIR / "sw.js", media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
 @app.get("/", include_in_schema=False)
 @app.get("/demo", include_in_schema=False)
 @app.get("/mobile", include_in_schema=False)

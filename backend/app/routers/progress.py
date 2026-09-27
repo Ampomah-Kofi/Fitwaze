@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.enums import SessionStatusEnum
-from app.engines.calories import estimate_calories
+from app.engines.calories import estimate_calories, estimate_steps
 from app.models.profile import HealthProfile
 from app.models.session import ActivitySession
 from app.models.user import User
@@ -152,6 +152,7 @@ def export_activity_csv(
     zone = _zone(x_timezone)
     profile = db.get(HealthProfile, current_user.id)
     weight_kg = float(profile.weight_kg) if profile is not None else None
+    height_cm = float(profile.height_cm) if profile is not None else None
     rows = db.scalars(
         select(ActivitySession)
         .where(ActivitySession.user_id == current_user.id)
@@ -160,7 +161,7 @@ def export_activity_csv(
     )
     out = io.StringIO()
     writer = csv.writer(out)
-    writer.writerow(["Date", "Activity", "Minutes", "Miles", "Calories (estimate)", "Measured by GPS",
+    writer.writerow(["Date", "Activity", "Minutes", "Miles", "Calories (estimate)", "Steps (estimate)", "Measured by GPS",
                      "How it felt", "Blood sugar before (mg/dL)", "Blood sugar after (mg/dL)"])
     for s in rows:
         minutes = s.measured_minutes if s.measured_minutes is not None else s.estimated_minutes
@@ -172,6 +173,7 @@ def export_activity_csv(
             round(minutes),
             f"{metres / 1609.344:.2f}",
             estimate_calories(activity, minutes, weight_kg, metres) or "",
+            estimate_steps(activity, metres, height_cm) or "",
             "yes" if s.measured_minutes is not None else "no",
             (s.effort or "").replace("_", " "),
             _before_reading(s) or "",
@@ -222,6 +224,7 @@ def get_progress(
 
     profile = db.get(HealthProfile, current_user.id)
     weight_kg = float(profile.weight_kg) if profile is not None else None
+    height_cm = float(profile.height_cm) if profile is not None else None
 
     # Prefer what the phone measured; fall back to the plan when the walk was
     # not tracked.
@@ -235,6 +238,9 @@ def get_progress(
         return estimate_calories(s.activity_recommendation.activity_type, minutes(s), weight_kg, metres(s))
 
     burned = [calories(s) for s in completed]
+
+    def steps(s: ActivitySession) -> int | None:
+        return estimate_steps(s.activity_recommendation.activity_type, metres(s), height_cm)
 
     glucose_walks = []
     for s in sorted(completed, key=lambda s: completed_at_utc.get(s.id) or now):
@@ -269,6 +275,7 @@ def get_progress(
         last_7_days_minutes=last_7_days_minutes,
         current_streak_days=streak,
         total_calories=sum(c for c in burned if c) if weight_kg else None,
+        total_steps=sum(n for n in (steps(s) for s in completed) if n),
         recent_sessions=[
             ProgressSessionSummary(
                 id=s.id,
@@ -279,6 +286,7 @@ def get_progress(
                 created_at=s.created_at,
                 completed_at=s.completed_at,
                 calories=calories(s),
+                steps=steps(s),
                 measured=s.measured_minutes is not None,
             )
             for s in sessions[:RECENT_SESSION_LIMIT]
