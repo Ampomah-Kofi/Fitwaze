@@ -175,3 +175,38 @@ def test_points_outside_coverage_stay_unverified():
     provider = _provider(_with_elevation(_street_server([]), lambda lat, lon: None, calls),
                          elevation_url="https://elevation.test/v1/ned10m")
     assert all("slope" in r.unknown_attributes for r in provider.get_candidate_routes(*START, ActivityTypeEnum.walk, 20))
+
+
+def test_a_worse_resize_keeps_the_first_route():
+    requests: list[httpx.Request] = []
+    base = _street_server(requests)
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        response = base(request)
+        data = response.json()
+        # First attempt: 40% long. Second (resized) attempt: 80% long.
+        data["routes"][0]["distance"] *= 1.4 if calls["n"] % 2 else 1.8
+        return httpx.Response(200, json=data)
+
+    routes = _provider(handler).get_candidate_routes(*START, ActivityTypeEnum.walk, 20)
+    target = 5000 / 60 * 20
+    for route in routes:
+        assert route.distance_m < target * 1.8
+
+
+def test_a_failed_resize_keeps_the_usable_first_route():
+    base = _street_server([])
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] % 2 == 0:
+            return httpx.Response(503)
+        response = base(request)
+        data = response.json()
+        data["routes"][0]["distance"] *= 2.0
+        return httpx.Response(200, json=data)
+
+    assert len(_provider(handler).get_candidate_routes(*START, ActivityTypeEnum.walk, 20)) == 3

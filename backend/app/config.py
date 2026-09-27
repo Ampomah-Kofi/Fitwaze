@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     # OpenTopoData-compatible elevation service used to measure hills on OSRM
     # routes. Default: USGS 10 m elevation (covers the US, incl. Alabama).
     # Empty disables it, leaving gradient unverified.
+    # Number of reverse proxies in front of the app that append to
+    # X-Forwarded-For (Render: 1). 0 ignores the header. Used for rate limits.
+    trusted_proxy_hops: int = Field(default=0, alias="TRUSTED_PROXY_HOPS")
     # Overpass API used to read OpenStreetMap street details (sidewalks, speed
     # limits, bike lanes...) along OSRM routes. Empty disables the check.
     overpass_url: str = Field(default="https://overpass-api.de/api/interpreter", alias="OVERPASS_URL")

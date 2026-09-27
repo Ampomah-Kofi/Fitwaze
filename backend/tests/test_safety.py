@@ -149,3 +149,28 @@ def test_route_options_carry_the_heat_note(client, monkeypatch):
     body = client.post("/route/options", json={"activity_recommendation_id": rec["id"], "latitude": 33.5,
                                                "longitude": -86.8}, headers=headers).json()
     assert body["weather"]["level"] == "danger"
+
+
+def test_a_high_reading_after_a_walk_is_not_called_good():
+    advice = after_walk_advice(15.0, None)  # 270 mg/dL
+    assert "good range" not in advice and "higher than ideal" in advice
+
+
+def test_an_after_walk_reading_must_state_its_unit(client):
+    response = _completed_walk(client, post_glucose_value=30)
+    assert response.status_code == 422
+
+
+def test_rate_limit_key_ignores_caller_written_forwarding_entries(monkeypatch):
+    from starlette.requests import Request
+    from app.security import rate_limit
+
+    def request(forwarded):
+        return Request({"type": "http", "headers": [(b"x-forwarded-for", forwarded.encode())],
+                        "client": ("10.0.0.1", 1234)})
+
+    monkeypatch.setattr(rate_limit.get_settings(), "trusted_proxy_hops", 0)
+    assert rate_limit.client_ip(request("1.2.3.4")) == "10.0.0.1"
+    monkeypatch.setattr(rate_limit.get_settings(), "trusted_proxy_hops", 1)
+    # The caller forged "6.6.6.6"; Render's proxy appended the real 203.0.113.9.
+    assert rate_limit.client_ip(request("6.6.6.6, 203.0.113.9")) == "203.0.113.9"

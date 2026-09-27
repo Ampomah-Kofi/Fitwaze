@@ -1909,7 +1909,6 @@ async function updateSession(status, checkin) {
 
 el("btn-complete").onclick = busy(el("btn-complete"), async () => {
   if (session && !session.simulated && session.status === "selected") {
-    if (watchId !== null) trackEndedAt = Date.now();
     stopTracking();
     el("finish-sheet").hidden = false;
     return;
@@ -2140,7 +2139,12 @@ function measuredPayload() {
   if (!session || session.simulated || trackStartedAt === null) return {};
   const minutes = ((trackEndedAt || Date.now()) - trackStartedAt) / 60000;
   if (!(minutes > 0.2)) return {};
-  return { measured_minutes: Math.round(minutes * 10) / 10, measured_distance_m: Math.round(travelledMetres) };
+  const measured = { measured_minutes: Math.round(minutes * 10) / 10 };
+  // Too little distance means GPS did not really follow the walk (no signal,
+  // permission lost): send the time only and let the server use the planned
+  // distance rather than recording a walk of 0 miles.
+  if (travelledMetres >= 50) measured.measured_distance_m = Math.round(travelledMetres);
+  return measured;
 }
 
 function finishCheckinPayload() {
@@ -2324,7 +2328,9 @@ async function requestWakeLock() {
 
 function stopTracking() {
   if (simulationTimer !== null) { clearInterval(simulationTimer); simulationTimer = null; }
-  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  // Remember when GPS tracking stopped (error, permission, pause, finish), so
+  // the recorded time is the time actually tracked.
+  if (watchId !== null) { trackEndedAt = Date.now(); navigator.geolocation.clearWatch(watchId); watchId = null; }
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
   el("btn-track").textContent = session && session.simulated ? "Start simulation" : "Start activity";

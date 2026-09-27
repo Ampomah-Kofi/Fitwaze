@@ -193,18 +193,25 @@ class OSRMRouteProvider(RouteProvider):
     def _candidate(self, client, activity_type, lat, lon, label, wanted_m, bearing):
         length = wanted_m
         best = None
-        for _attempt in range(2):
+        for attempt in range(2):
             waypoints = (
                 out_and_back_waypoints(lat, lon, length, bearing)
                 if label == "out_and_back"
                 else loop_waypoints(lat, lon, length, bearing)
             )
-            geometry, distance_m, duration_s, route_segments = self._route(client, activity_type, lat, lon, waypoints)
-            best = (geometry, distance_m, duration_s, route_segments)
-            if abs(distance_m - wanted_m) <= wanted_m * _LENGTH_TOLERANCE:
+            try:
+                result = self._route(client, activity_type, lat, lon, waypoints)
+            except (httpx.HTTPError, OSRMProviderError, KeyError, IndexError, TypeError, ValueError):
+                if best is None:
+                    raise
+                break  # the resize failed: keep the usable first route
+            # Keep whichever attempt came closer to the wanted length.
+            if best is None or abs(result[1] - wanted_m) < abs(best[1] - wanted_m):
+                best = result
+            if abs(result[1] - wanted_m) <= wanted_m * _LENGTH_TOLERANCE:
                 break
             # Resize the circle by how far off the streets took us, once.
-            length = length * wanted_m / distance_m
+            length = length * wanted_m / result[1]
 
         geometry, distance_m, duration_s, route_segments = best
         route = RawRoute(

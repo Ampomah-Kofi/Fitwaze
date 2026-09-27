@@ -437,3 +437,12 @@ test('saving a tracked walk sends what the phone measured', async () => {
   assert(Math.abs(requests[0].measured_minutes - 14) < 0.2);
   assert.equal(requests[0].measured_distance_m, 1180);
 });
+
+test('a walk where GPS never moved records time but not a 0-mile distance', () => {
+  const app = setup();
+  app.run(`session = {id: 's1', status: 'selected', distance_m: 1000, route_geometry: [[33.5, -86.8]]};
+    trackStartedAt = Date.now() - 10 * 60000; trackEndedAt = Date.now() - 2 * 60000; travelledMetres = 0;`);
+  const measured = app.run('measuredPayload()');
+  assert(Math.abs(measured.measured_minutes - 8) < 0.2, 'time stops when tracking stopped');
+  assert.equal(measured.measured_distance_m, undefined);
+});

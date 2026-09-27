@@ -386,7 +386,11 @@ def after_walk_advice(
             )
         elif glucose_mmol_l >= VERY_HIGH_FROM_MMOL_L:
             parts.append(
-                "Your blood sugar is high. Drink water, and contact your care team if it stays high."
+                "Your blood sugar is very high. Drink water, and contact your care team if it stays this high."
+            )
+        elif glucose_mmol_l >= HIGH_FROM_MMOL_L:
+            parts.append(
+                "Your blood sugar is higher than ideal. Drink water and check again in a couple of hours."
             )
         else:
             parts.append("Your blood sugar is in a good range after your activity.")

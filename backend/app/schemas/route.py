@@ -107,13 +107,17 @@ class RouteSessionUpdateRequest(BaseModel):
     # Optional after-walk check-in, sent with the completion.
     effort: Literal["easy", "just_right", "hard"] | None = None
     post_glucose_value: float | None = Field(default=None, gt=0, le=1000)
-    post_glucose_unit: Literal["mmol/L", "mg/dL"] = "mg/dL"
+    # Required with a reading: guessing the unit could read a dangerous low
+    # (e.g. 30 mg/dL) as a high (30 mmol/L).
+    post_glucose_unit: Literal["mmol/L", "mg/dL"] | None = None
     # What GPS tracking measured, when the person tracked the walk.
     measured_minutes: float | None = Field(default=None, gt=0, le=600)
     measured_distance_m: float | None = Field(default=None, ge=0, le=200_000)
 
     @model_validator(mode="after")
     def _plausible_reading(self) -> "RouteSessionUpdateRequest":
+        if self.post_glucose_value is not None and self.post_glucose_unit is None:
+            raise ValueError("Say whether the blood glucose reading is in mg/dL or mmol/L.")
         mmol = self.post_glucose_mmol_l
         if mmol is not None and not (1.0 <= mmol <= 35.0):
             raise ValueError("That blood glucose reading looks out of range. Check the number and the unit.")

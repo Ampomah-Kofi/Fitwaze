@@ -17,6 +17,7 @@ COPY . .
 EXPOSE 8000
 
 # Apply database migrations, then serve. Hosting platforms pass the port in
-# $PORT. --proxy-headers makes the client address the real caller's rather
-# than the platform's load balancer, which rate limiting depends on.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+# $PORT. The caller's real address for rate limiting is read from the
+# platform proxy's X-Forwarded-For entry (TRUSTED_PROXY_HOPS), not from
+# uvicorn's --forwarded-allow-ips='*', which trusts caller-written entries.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
