@@ -861,6 +861,14 @@
   .reminder-row input { margin: 0; flex: 0 0 148px; }
   .reminder-row button { margin: 0; flex: 1; min-width: 0; white-space: nowrap; font-size: 15px; padding: 0 10px; }
 
+
+  /* Language. */
+  .lang-group { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .auth-lang { display: flex; justify-content: center; gap: 4px; margin-top: 14px; }
+  .auth-lang button { width: auto; min-height: 32px; padding: 0 12px; margin: 0; border: 0; border-radius: 16px;
+    background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; }
+  .auth-lang button[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
+
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
      system dark colours. Only tokens change, plus the few places that
@@ -974,6 +982,10 @@
           <p id="password-hint" class="field-hint" hidden>At least 10 characters. A short sentence you'll remember works well.</p>
           <p id="auth-message" class="auth-message" role="alert" hidden></p>
           <button id="btn-auth" type="submit">Sign in</button>
+          <div class="auth-lang">
+            <button type="button" data-lang-choice="en" aria-pressed="true">English</button>
+            <button type="button" data-lang-choice="es" aria-pressed="false">Español</button>
+          </div>
           <p class="note auth-trust" id="account-state">Your health details are encrypted and only used to plan your walks.</p>
         </form>
 
@@ -1265,6 +1277,11 @@
           <input id="reminder-time" type="time" value="07:30" aria-label="Reminder time" />
           <button id="btn-reminder" class="ghost" type="button">Add to my calendar</button>
         </div>
+      </div>
+      <label id="lang-label" style="margin-top:18px">Language</label>
+      <div class="segmented segmented-2 lang-group" role="group" aria-labelledby="lang-label">
+        <button type="button" data-lang-choice="en" aria-pressed="true">English</button>
+        <button type="button" data-lang-choice="es" aria-pressed="false">Español</button>
       </div>
       <label id="theme-label" style="margin-top:18px">Appearance</label>
       <div class="segmented segmented-3" id="theme-group" role="group" aria-labelledby="theme-label">
@@ -1614,6 +1631,586 @@ function profilePayload() {
     emergency_contact_name: el("emergency_contact_name").value.trim() || null,
     emergency_contact_phone: el("emergency_contact_phone").value.trim() || null,
   };
+}
+
+
+// --- Español ------------------------------------------------------------------
+// The page is written in English. In Spanish, every piece of text shown is
+// looked up here as it appears (including messages from the server), so no
+// screen needs its own translated copy. Text with numbers in it goes through
+// ES_PATTERNS; anything not listed stays in English rather than breaking.
+const ES = {
+"(optional)": "(opcional)",
+"10 miles": "10 millas",
+"10 minutes": "10 minutos",
+"15 minutes": "15 minutos",
+"15 minutes are up. Check your blood sugar. If it is still under 70, take another 15 grams of sugar and wait 15 minutes again. When it is back above 70, have a snack before you go on.": "Pasaron 15 minutos. Mida su azúcar. Si sigue por debajo de 70, tome otros 15 gramos de azúcar y espere 15 minutos más. Cuando esté por encima de 70, coma algo antes de seguir.",
+"150-minute week": "Semana de 150 minutos",
+"20 minutes": "20 minutos",
+"30 minutes": "30 minutos",
+"45 minutes": "45 minutos",
+"50 miles": "50 millas",
+"60 minutes": "60 minutos",
+"A change of scenery": "Un cambio de aires",
+"A good route starts with you.": "Una buena ruta empieza con usted.",
+"A new sore, blister, cut or swelling on my feet": "Una llaga, ampolla, cortada o hinchazón nueva en los pies",
+"A quick check-in shapes today's activity around how you are right now.": "Un registro rápido adapta la actividad de hoy a cómo se siente ahora.",
+"About the same": "Casi igual",
+"Account": "Cuenta",
+"Account created. Welcome!": "Cuenta creada. ¡Bienvenido!",
+"Achievements": "Logros",
+"Active minutes / week": "Minutos activos / semana",
+"Add a daily alert to your phone's calendar for your check-in and walk.": "Agregue una alerta diaria al calendario de su teléfono para su registro y caminata.",
+"Add an emergency contact in your profile to text them in one tap.": "Agregue un contacto de emergencia en su perfil para escribirle con un toque.",
+"Add to my calendar": "Agregar a mi calendario",
+"Add to my walk": "Agregar a mi caminata",
+"After": "Después",
+"After the walk": "Después de caminar",
+"Age": "Edad",
+"Appearance": "Apariencia",
+"Apple Maps: to turn-back point": "Apple Maps: hasta el punto de regreso",
+"At least 10 characters": "Al menos 10 caracteres",
+"At least 10 characters. A short sentence you'll remember works well.": "Al menos 10 caracteres. Una frase corta que recuerde funciona bien.",
+"Auto": "Automático",
+"Based on the abilities you shared, we're recommending cycling rather than walking.": "Según lo que nos contó, le recomendamos bicicleta en lugar de caminar.",
+"Be active 3 days in a row.": "Manténgase activo 3 días seguidos.",
+"Be active 7 days in a row.": "Manténgase activo 7 días seguidos.",
+"Because of the foot problem you reported, we're suggesting cycling today to keep weight off your feet. Have it checked if it is not healing.": "Por el problema en el pie que reportó, hoy sugerimos bicicleta para no cargar peso en los pies. Hágaselo revisar si no sana.",
+"Because you take insulin or a sulfonylurea, carry fast sugar (glucose tablets or juice) on every walk, and stop if you feel shaky, sweaty or dizzy.": "Como usa insulina o una sulfonilurea, lleve azúcar rápida (tabletas de glucosa o jugo) en cada caminata, y deténgase si tiene temblores, sudor o mareo.",
+"Because you're already averaging a high amount of weekly activity, we're recommending a longer session.": "Como ya hace mucha actividad cada semana, le recomendamos una sesión más larga.",
+"Because you're already averaging a moderate amount of weekly activity, we're recommending a moderate-length session.": "Como ya hace una cantidad moderada de actividad cada semana, le recomendamos una sesión de duración media.",
+"Because you're averaging under an hour a week of activity currently, we're starting with a short, manageable session.": "Como ahora hace menos de una hora de actividad a la semana, empezamos con una sesión corta y fácil.",
+"Before": "Antes",
+"Before (check-in)": "Antes (registro)",
+"Bike lanes": "Carriles de bici",
+"Blood sugar and your walks": "El azúcar y sus caminatas",
+"Blood sugar before and after each walk": "Azúcar antes y después de cada caminata",
+"Blood sugar now": "Azúcar ahora",
+"Blood sugar reading": "Nivel de azúcar en la sangre",
+"Blood sugar unit": "Unidad del azúcar",
+"Busy roads": "Calles con tráfico",
+"Call 911": "Llamar al 911",
+"Call contact": "Llamar al contacto",
+"Call my contact": "Llamar a mi contacto",
+"Can't reach FitWaze. Check your internet connection and try again.": "No se puede conectar con FitWaze. Revise su conexión a internet e intente de nuevo.",
+"Change": "Cambio",
+"Check in, get a safe loop from your door, and always come back to where you started.": "Registre cómo se siente, reciba una ruta segura desde su puerta y vuelva siempre al punto de partida.",
+"Check in, get today's plan, and find a walk near home.": "Registre cómo está, reciba el plan de hoy y encuentre una caminata cerca de casa.",
+"Check your blood sugar before and after a walk.": "Mida su azúcar antes y después de una caminata.",
+"Chest pain, trouble breathing or fainting: call 911 now.": "Dolor de pecho, dificultad para respirar o desmayo: llame al 911 ahora.",
+"Chest pain, unusual breathlessness, dizziness or fainting": "Dolor de pecho, falta de aire fuera de lo normal, mareo o desmayo",
+"Choose a password of at least 10 characters.": "Elija una contraseña de al menos 10 caracteres.",
+"Choose a starting point, compare your routes, and find your favourite way around.": "Elija un punto de partida, compare sus rutas y encuentre su camino favorito.",
+"Choose a starting point: tap the map, use your location, or enter coordinates. Then tap Find my routes.": "Elija una salida: toque el mapa, use su ubicación o escriba coordenadas. Luego toque Buscar mis rutas.",
+"Choose this route": "Elegir esta ruta",
+"Choose your start point and tap Find my routes.": "Elija su salida y toque Buscar mis rutas.",
+"Choose your starting point.": "Elija su punto de partida.",
+"Chosen start": "Salida elegida",
+"Comfortable conditions for a walk.": "Buen clima para caminar.",
+"Complete your health profile before requesting a recommendation": "Complete su perfil de salud antes de pedir una recomendación",
+"Could not get your location.": "No se pudo obtener su ubicación.",
+"Could not renew your session. Sign in again if requested, then retry.": "No se pudo renovar su sesión. Inicie sesión de nuevo si se le pide y vuelva a intentarlo.",
+"Cover 10 miles in all.": "Recorra 10 millas en total.",
+"Cover 50 miles in all.": "Recorra 50 millas en total.",
+"Create account": "Crear cuenta",
+"Create your account": "Cree su cuenta",
+"Current location": "Ubicación actual",
+"Cycle": "Andar en bicicleta",
+"Cycling": "Bicicleta",
+"Daily reminder": "Recordatorio diario",
+"Dark": "Oscuro",
+"Day": "Día",
+"Demo experience": "Versión de prueba",
+"Demo only: follows the selected route automatically. It does not use GPS or count as real exercise.": "Solo demostración: sigue la ruta sola. No usa GPS ni cuenta como ejercicio real.",
+"Details marked \"unverified\" (such as steps or pavements) are not available from this route source, so they are estimated rather than surveyed.": "Los datos marcados \"sin verificar\" (como escalones o aceras) no están disponibles en esta fuente, así que son estimados.",
+"Diabetes status": "Diabetes",
+"Directions back to my start": "Cómo volver a mi salida",
+"Directions home": "Cómo volver",
+"Don't keep walking until you feel better.": "No siga caminando hasta sentirse mejor.",
+"Download GPX": "Descargar GPX",
+"Downloads a spreadsheet of your walks and rides (date, minutes, miles, calories, how it felt, blood sugar afterwards) that you can email or show to your doctor or nurse.": "Descarga una hoja con sus caminatas y paseos (fecha, minutos, millas, calorías, cómo se sintió, azúcar después) para enviar o mostrar a su médico o enfermera.",
+"Easy": "Fácil",
+"Email": "Correo electrónico",
+"Emergency contact": "Contacto de emergencia",
+"End early": "Terminar antes",
+"End my walk": "Terminar mi caminata",
+"English": "English", "Home": "Casa",
+"Enter another starting location": "Escribir otro punto de partida",
+"Enter latitude between -90 and 90 and longitude between -180 and 180.": "Escriba una latitud entre -90 y 90 y una longitud entre -180 y 180.",
+"Enter your blood sugar in the morning check-in, then again when you finish (“How did that feel?”). After a walk or two you'll see what walking does for your numbers here.": "Escriba su azúcar en el registro de la mañana y otra vez al terminar (“¿Cómo se sintió?”). Después de una o dos caminatas verá aquí lo que caminar hace por sus números.",
+"Enter your email address, like name@example.com.": "Escriba su correo electrónico, por ejemplo nombre@ejemplo.com.",
+"Enter your password.": "Escriba su contraseña.",
+"Español": "Español",
+"Every little bit adds up": "Cada paso cuenta",
+"Female": "Mujer",
+"Find a route near me": "Buscar una ruta cerca de mí",
+"Find my routes": "Buscar mis rutas",
+"Find routes again before choosing one.": "Busque rutas de nuevo antes de elegir una.",
+"Find your route": "Encuentre su ruta",
+"Finish": "Terminar",
+"Finish 10 walks or rides.": "Termine 10 caminatas o paseos.",
+"Finish 25 walks or rides.": "Termine 25 caminatas o paseos.",
+"Finish or abandon your current activity before changing the start point.": "Termine su actividad actual antes de cambiar la salida.",
+"Finish or abandon your current activity before changing your profile.": "Termine su actividad actual antes de cambiar su perfil.",
+"Finish or abandon your current activity before starting another.": "Termine su actividad actual antes de empezar otra.",
+"Finish or abandon your current activity first.": "Primero termine su actividad actual.",
+"Finish or end your current activity before signing out.": "Termine su actividad actual antes de cerrar sesión.",
+"Finish your first walk or ride.": "Termine su primera caminata o paseo.",
+"First step": "Primer paso",
+"FitWaze is following your route and will tell you when to turn back.": "FitWaze sigue su ruta y le avisará cuándo regresar.",
+"Flat": "Plano",
+"Follow me": "Seguirme",
+"Follow the green line. We'll tell you when to turn back.": "Siga la línea verde. Le avisaremos cuándo regresar.",
+"Following you live. The orange line is where you have been; the green route brings you back to your start. Your position stays on this phone.": "Siguiéndole en vivo. La línea naranja es por donde pasó; la ruta verde le lleva de vuelta. Su ubicación se queda en este teléfono.",
+"For example glipizide, glimepiride or glyburide. These can make blood sugar drop during exercise.": "Por ejemplo glipizida, glimepirida o gliburida. Pueden bajar el azúcar durante el ejercicio.",
+"For this session": "Para esta sesión",
+"From home": "Desde casa",
+"Full": "Sin problema",
+"Full week": "Semana completa",
+"General fitness": "Estar en forma",
+"Gentle hills": "Cuestas suaves",
+"Geolocation needs HTTPS or localhost. Tap the map to set a start point.": "La ubicación necesita HTTPS. Toque el mapa para fijar la salida.",
+"Get a recommendation and choose a start point first.": "Primero pida una recomendación y elija una salida.",
+"Get a recommendation in Today, then set your starting point on the map to find routes.": "Pida una recomendación en Hoy y luego fije su salida en el mapa para buscar rutas.",
+"Get today's plan": "Ver el plan de hoy",
+"Getting around": "Movilidad",
+"Given the mobility considerations you shared, we're using a shorter, low-impact pacing to keep the session comfortable and sustainable.": "Por lo que nos contó sobre su movilidad, usamos un ritmo más corto y suave para que la sesión sea cómoda.",
+"Goal": "Meta",
+"Good": "Bien",
+"Good afternoon": "Buenas tardes",
+"Good evening": "Buenas noches",
+"Good morning": "Buenos días",
+"Google Maps: full loop": "Google Maps: circuito completo",
+"Habit formed": "Hábito formado",
+"Halfway: head back from here": "Mitad del camino: regrese desde aquí",
+"Hard": "Difícil",
+"Head back to your start. Open the panel and tap Directions back to my start for Apple Maps directions.": "Regrese a su salida. Abra el panel y toque Cómo volver a mi salida para ver indicaciones.",
+"Heads up: this one has both steps and noticeable gradient, which may not suit you.": "Atención: esta tiene escalones y pendiente, y puede no ser adecuada para usted.",
+"Health profile": "Perfil de salud",
+"Height": "Estatura",
+"Height, feet": "Estatura, pies",
+"Height, inches": "Estatura, pulgadas",
+"Hide": "Ocultar",
+"Hide password": "Ocultar contraseña",
+"Hilly": "Con cuestas",
+"Home saved.": "Casa guardada.",
+"Home saved. Your routes will start and finish here.": "Casa guardada. Sus rutas empezarán y terminarán aquí.",
+"How are you this morning?": "¿Cómo está esta mañana?",
+"How did that feel?": "¿Cómo se sintió?",
+"How it felt": "Cómo se sintió",
+"How long": "Cuánto tiempo",
+"How you feel and your blood sugar set today's plan.": "Cómo se siente y su nivel de azúcar definen el plan de hoy.",
+"I feel": "Me siento",
+"I feel better, continue": "Me siento mejor, continuar",
+"I prefer to": "Prefiero",
+"I take insulin or a sulfonylurea": "Uso insulina o una sulfonilurea",
+"I took sugar: start 15-minute timer": "Ya tomé azúcar: iniciar 15 minutos",
+"If you feel shaky, sweaty, dizzy or confused, your blood sugar may be low.": "Si tiene temblores, sudor, mareo o confusión, su azúcar puede estar baja.",
+"In Safari, tap Share, then Add to Home Screen.": "En Safari, toque Compartir y luego Agregar a pantalla de inicio.",
+"Includes steps": "Tiene escalones",
+"Install": "Instalar",
+"Invalid email or password": "Correo o contraseña incorrectos",
+"It felt easy: great progress.": "Se sintió fácil: gran progreso.",
+"It felt hard, so take it easy today. Tell your care team if walks keep feeling this hard.": "Se sintió difícil, así que descanse hoy. Dígale a su equipo médico si las caminatas siguen sintiéndose así.",
+"It takes a minute. Your health details stay private.": "Toma un minuto. Sus datos de salud son privados.",
+"It's cold. Wear warm layers and good shoes, and take it slowly.": "Hace frío. Abríguese, use buenos zapatos y vaya despacio.",
+"It's dangerously hot right now. Please don't walk outside: walk indoors (a mall or gym), or wait for a cooler time of day.": "Hace un calor peligroso ahora. No camine afuera: camine bajo techo (un centro comercial o gimnasio) o espere a que refresque.",
+"It's hot and humid. Walk in the early morning or evening if you can, choose the shorter route, carry water, and stop if you feel dizzy or sick.": "Hace calor y humedad. Camine temprano en la mañana o en la tarde si puede, elija la ruta más corta, lleve agua y deténgase si se marea o se siente mal.",
+"It's hot today. Sip water, go slowly, and stop if you feel dizzy.": "Hace calor hoy. Tome agua, vaya despacio y deténgase si se marea.",
+"It's warm. Drink water before you go and take it at an easy pace.": "Hace calor. Tome agua antes de salir y vaya a paso tranquilo.",
+"Just right": "Bien",
+"Know your numbers": "Conozca sus números",
+"Language": "Idioma",
+"Latitude": "Latitud",
+"Let someone know I'm going": "Avisar a alguien que salgo",
+"Light": "Claro",
+"Limited": "Con limitaciones",
+"Live tracking needs HTTPS or localhost.": "El seguimiento en vivo necesita HTTPS.",
+"Locating timed out. Try again, or tap the map.": "Se agotó el tiempo para ubicarle. Intente de nuevo o toque el mapa.",
+"Location permission denied.": "Permiso de ubicación denegado.",
+"Location permission denied. Tap the map to set a start point instead.": "Permiso de ubicación denegado. Toque el mapa para fijar la salida.",
+"Longer loop": "Circuito largo",
+"Longitude": "Longitud",
+"Lost your position.": "Se perdió su ubicación.",
+"Lows can happen hours after exercise, so check again before bed.": "El azúcar puede bajar horas después del ejercicio, así que mídala otra vez antes de dormir.",
+"Main navigation": "Navegación principal",
+"Make it personal": "Personalícelo",
+"Male": "Hombre",
+"Manage prediabetes": "Controlar la prediabetes",
+"Manage type 2 diabetes": "Controlar la diabetes tipo 2",
+"Map & start point": "Mapa y salida",
+"Map data © OpenStreetMap contributors.": "Datos del mapa © colaboradores de OpenStreetMap.",
+"Map library could not be loaded, so the map is unavailable. Everything else still works.": "No se pudo cargar el mapa. Todo lo demás funciona.",
+"Message copied. Paste it to someone you trust.": "Mensaje copiado. Péguelo para alguien de confianza.",
+"Mild": "Leves",
+"Minutes, miles and calories for your care team.": "Minutos, millas y calorías para su equipo médico.",
+"Mobility limitations": "Limitaciones de movilidad",
+"Moderate": "Moderadas",
+"Morning check-in": "Registro de la mañana",
+"Name": "Nombre",
+"No preference": "Sin preferencia",
+"No routes here suit your profile.": "Aquí no hay rutas adecuadas para su perfil.",
+"None": "Ninguna",
+"Not feeling well?": "¿Se siente mal?",
+"Not now": "Ahora no",
+"Okay": "Regular",
+"Only a route you finished can be walked again": "Solo puede repetir una ruta que terminó",
+"Open in Maps": "Abrir en Mapas",
+"Open it like an app, full screen.": "Ábrala como una aplicación, en pantalla completa.",
+"Or ride one you've done before": "O repita un paseo que ya hizo",
+"Or walk one you've done before": "O repita una caminata que ya hizo",
+"Other": "Otro",
+"Password": "Contraseña",
+"Pause simulation": "Pausar simulación",
+"Please sign in again. Your current route is kept in this tab.": "Inicie sesión de nuevo. Su ruta actual se conserva en esta pestaña.",
+"Practice ride": "Paseo de práctica",
+"Practice routes: sample shapes that do not follow real streets. Only for testing without a routing server.": "Rutas de práctica: formas de ejemplo que no siguen calles reales. Solo para pruebas.",
+"Practice run: the blue dot follows the route in about 20 seconds. No GPS or real exercise is recorded.": "Práctica: el punto azul recorre la ruta en unos 20 segundos. No se registra GPS ni ejercicio real.",
+"Practice walk": "Caminata de práctica",
+"Prediabetes": "Prediabetes",
+"Prefer not to say": "Prefiero no decirlo",
+"Profile saved.": "Perfil guardado.",
+"Profile updated. Get a new recommendation in Today.": "Perfil actualizado. Pida una nueva recomendación en Hoy.",
+"Progress": "Progreso",
+"Progress you can share": "Progreso que puede compartir",
+"Put FitWaze on your home screen": "Ponga FitWaze en su pantalla de inicio",
+"Quiet streets": "Calles tranquilas",
+"Ranked with your mobility needs in mind: gentle underfoot, but it does include steps.": "Ordenada según su movilidad: terreno suave, pero tiene escalones.",
+"Ranked with your mobility needs in mind: it is step-free and stays gentle underfoot.": "Ordenada según su movilidad: no tiene escalones y el terreno es suave.",
+"Ranked with your mobility needs in mind: step-free, though it does have some gradient.": "Ordenada según su movilidad: sin escalones, aunque tiene algo de pendiente.",
+"Reach the weekly goal of 150 active minutes.": "Llegue a la meta semanal de 150 minutos activos.",
+"Ready for a fresh route?": "¿Lista para una ruta nueva?",
+"Real streets near home": "Calles reales cerca de casa",
+"Recent activity": "Actividad reciente",
+"Recheck your blood sugar": "Mida su azúcar otra vez",
+"Recommend an activity for me": "Recomiéndeme una actividad",
+"Refresh": "Actualizar",
+"Reminder time": "Hora del recordatorio",
+"Rest for 15 minutes, then check your blood sugar if you can.": "Descanse 15 minutos y luego mida su azúcar si puede.",
+"Ride": "Bicicleta",
+"Ride again": "Pedalear otra vez",
+"Route": "Ruta",
+"Route map": "Mapa de la ruta",
+"Route selected. Ready when you are.": "Ruta elegida. Cuando usted quiera.",
+"Route view": "Vista de la ruta",
+"Routes & activity": "Rutas y actividad",
+"Routes along real streets and paths near you, checked for hills, steps, traffic and greenery.": "Rutas por calles y senderos reales cerca de usted, revisadas por cuestas, escalones, tráfico y áreas verdes.",
+"Routes along real streets and paths near you, from OpenStreetMap: hills checked against USGS data, and sidewalks, speed limits and bike lanes checked street by street. Routes along fast roads without sidewalks are not offered.": "Rutas por calles y senderos reales cerca de usted, de OpenStreetMap: cuestas revisadas con datos del USGS, y aceras, límites de velocidad y carriles de bici revisados calle por calle. No ofrecemos rutas por calles rápidas sin acera.",
+"Routing is temporarily unavailable for this start point. Try another location or try again later.": "Las rutas no están disponibles ahora para esta salida. Pruebe otro lugar o más tarde.",
+"Safety": "Seguridad",
+"Save profile": "Guardar perfil",
+"Save this spot as my home": "Guardar este lugar como mi casa",
+"Say whether the blood glucose reading is in mg/dL or mmol/L.": "Indique si la lectura de azúcar está en mg/dL o mmol/L.",
+"Session abandoned.": "Sesión terminada antes.",
+"Session completed.": "Sesión terminada.",
+"Sessions / week": "Sesiones / semana",
+"Severe": "Graves",
+"Sex": "Sexo",
+"Share with my care team": "Compartir con mi equipo médico",
+"Short loop": "Circuito corto",
+"Show": "Mostrar",
+"Show as a list": "Ver como lista",
+"Show my location": "Mostrar mi ubicación",
+"Show password": "Mostrar contraseña",
+"Show walk details": "Ver detalles",
+"Sidewalks, hills and busy roads checked for you.": "Revisamos aceras, cuestas y calles con mucho tráfico por usted.",
+"Sign in": "Iniciar sesión",
+"Sign in to see today's plan and your progress.": "Inicie sesión para ver el plan de hoy y su progreso.",
+"Sign out": "Cerrar sesión",
+"Signed in.": "Sesión iniciada.",
+"Signed out.": "Sesión cerrada.",
+"Simulation finished. Tap Finish to add it to demo progress. Your real exercise totals are unchanged.": "Simulación terminada. Toque Terminar para agregarla al progreso de prueba. Sus totales reales no cambian.",
+"Simulation selected. No real activity will be recorded.": "Simulación elegida. No se registrará actividad real.",
+"Since your goal involves weight management or blood-sugar management, we're leaning toward the higher end of that range, aiming for about 5x/week for the best benefit.": "Como su meta es controlar el peso o el azúcar, vamos hacia la parte alta de ese rango, con la idea de unas 5 veces por semana para el mejor beneficio.",
+"Skip": "Omitir",
+"Slide details away to see the map": "Ocultar detalles para ver el mapa",
+"Some route attributes are unverified; the score includes neutral placeholders, not measured accessibility.": "Algunos datos de la ruta no están verificados; la puntuación usa valores neutros, no accesibilidad medida.",
+"Sound and voice: off": "Sonido y voz: desactivado",
+"Sound and voice: on": "Sonido y voz: activado",
+"Start activity": "Empezar actividad",
+"Start point": "Punto de partida",
+"Start simulation": "Empezar simulación",
+"Start where you are. You can update your profile as your routine changes.": "Empiece donde está. Puede actualizar su perfil cuando cambie su rutina.",
+"Start with an activity recommendation in Today.": "Empiece con una recomendación en Hoy.",
+"Step-free": "Sin escalones",
+"Steps or gradient are unverified, so suitability for your mobility needs cannot be confirmed.": "Los escalones o la pendiente no están verificados, así que no podemos confirmar si le convienen.",
+"Steps unverified": "Escalones sin verificar",
+"Stop and sit down": "Deténgase y siéntese",
+"Stop tracking": "Detener seguimiento",
+"Suggest a length for me": "Sugiérame una duración",
+"Take 15 g of fast sugar: half a glass of juice or 3–4 glucose tablets.": "Tome 15 g de azúcar rápida: medio vaso de jugo o 3–4 tabletas de glucosa.",
+"Tap the map, or use your current location, to set a start point.": "Toque el mapa o use su ubicación actual para fijar la salida.",
+"Target 70–180": "Meta 70–180",
+"Ten done": "Diez hechas",
+"That blood glucose reading looks out of range. Check the number and the unit (mmol/L or mg/dL).": "Esa lectura de azúcar parece fuera de rango. Revise el número y la unidad (mmol/L o mg/dL).",
+"That blood glucose reading looks out of range. Check the number and the unit.": "Esa lectura de azúcar parece fuera de rango. Revise el número y la unidad.",
+"That email and password don't match. Check them and try again, or create an account.": "El correo y la contraseña no coinciden. Revíselos e intente de nuevo, o cree una cuenta.",
+"That route is longer than today's plan. Choose a shorter one today.": "Esa ruta es más larga que el plan de hoy. Elija una más corta hoy.",
+"The activity you chose is unavailable based on your saved abilities. Choose another activity or review your profile.": "La actividad que eligió no está disponible según sus capacidades. Elija otra o revise su perfil.",
+"The duration is based on your saved profile.": "La duración se basa en su perfil guardado.",
+"The symptoms you reported need attention before exercise. Please rest and contact your doctor or nurse today. If they are severe or getting worse, seek emergency help.": "Los síntomas que reportó necesitan atención antes de hacer ejercicio. Descanse y comuníquese hoy con su médico o enfermera. Si son graves o empeoran, busque ayuda de emergencia.",
+"Their phone": "Su teléfono",
+"There and back": "Ida y vuelta",
+"This browser has no geolocation support.": "Este navegador no puede ubicarle.",
+"This browser has no geolocation support. Tap the map instead.": "Este navegador no puede ubicarle. Toque el mapa.",
+"This is general wellness guidance, not medical advice": "Esto es orientación general de bienestar, no consejo médico",
+"This is what decides how hard the route engine works to avoid steps, hills and busy crossings for you.": "Esto decide cuánto evitamos escalones, cuestas y cruces con mucho tráfico para usted.",
+"This route is a reasonable option based on the available route data.": "Esta ruta es una opción razonable según los datos disponibles.",
+"This route option has changed. Find routes again before selecting it.": "Esta ruta cambió. Busque rutas de nuevo antes de elegirla.",
+"This week": "Esta semana",
+"Three in a row": "Tres seguidos",
+"Tick only what applies today.": "Marque solo lo que aplica hoy.",
+"Time to head back": "Hora de regresar",
+"Time to recheck your blood sugar.": "Es hora de medir su azúcar otra vez.",
+"Timer running": "Temporizador en marcha",
+"Tip: a 10-minute walk within half an hour after a meal helps lower the blood sugar rise that follows it. After dinner is a good time.": "Consejo: caminar 10 minutos dentro de la media hora después de comer ayuda a bajar la subida de azúcar. Después de la cena es un buen momento.",
+"Tired": "Cansado",
+"Today": "Hoy",
+"Today's plan": "El plan de hoy",
+"Too many tries. Wait a minute, then try again.": "Demasiados intentos. Espere un minuto e intente de nuevo.",
+"Took more sugar: start again": "Tomé más azúcar: empezar de nuevo",
+"Try a simulated journey": "Probar un recorrido simulado",
+"Turn back here": "Dé la vuelta aquí",
+"Turn back now": "Dé la vuelta ahora",
+"Type 2": "Tipo 2",
+"Unable": "No puedo",
+"Unwell": "Mal",
+"Use another maps app (optional)": "Usar otra app de mapas (opcional)",
+"Use this starting point": "Usar este punto de partida",
+"Waking up the server. The first sign-in of the day can take up to a minute.": "Activando el servidor. El primer inicio de sesión del día puede tardar hasta un minuto.",
+"Walk": "Caminar",
+"Walk again": "Caminar otra vez",
+"Walk in progress": "Caminata en curso",
+"Walk saved": "Caminata guardada",
+"Walk saved.": "Caminata guardada.",
+"Walking": "Caminar",
+"Walking may currently be more difficult for you, and cycling is available as a comfortable alternative, so we're recommending cycling.": "Caminar puede ser más difícil para usted ahora, y la bicicleta es una alternativa cómoda, así que le recomendamos bicicleta.",
+"Walks that fit your morning.": "Caminatas a la medida de su mañana.",
+"We couldn't create that account. If you already have one, choose Sign in.": "No pudimos crear esa cuenta. Si ya tiene una, elija Iniciar sesión.",
+"We're keeping increases in activity gradual and consistent rather than jumping in duration all at once, which tends to be a more sustainable approach.": "Aumentamos la actividad poco a poco y de forma constante, en lugar de alargarla de golpe, porque así es más fácil mantenerla.",
+"We're recommending a walking session as a safe, accessible default.": "Le recomendamos caminar como opción segura y accesible.",
+"Weekly goal reached. Well done!": "Meta semanal cumplida. ¡Muy bien!",
+"Weight": "Peso",
+"Weight management": "Controlar el peso",
+"Welcome back": "Bienvenido de nuevo",
+"Welcome back.": "Bienvenido de nuevo.",
+"Well done for getting out today.": "Muy bien por salir hoy.",
+"With a sore, blister or swelling on your feet, please don't walk on it today. Choose cycling for this session instead, or rest.": "Con una llaga, ampolla o hinchazón en los pies, no camine hoy. Elija bicicleta para esta sesión, o descanse.",
+"With a sore, blister or swelling on your feet, please don't walk on it today. Keep it clean and covered, and have it checked by your doctor or nurse.": "Con una llaga, ampolla o hinchazón en los pies, no camine hoy. Manténgala limpia y cubierta, y que la revise su médico o enfermera.",
+"You chose cycling for this session.": "Eligió bicicleta para esta sesión.",
+"You chose walking for this session.": "Eligió caminar para esta sesión.",
+"You said you feel tired this morning, so we've shortened today's session.": "Dijo que se siente cansado esta mañana, así que acortamos la sesión de hoy.",
+"You told us you feel unwell, so today is a rest day. Check your blood sugar more often while you are ill, and contact your care team if you are not improving.": "Nos dijo que se siente mal, así que hoy es día de descanso. Mida su azúcar más seguido mientras esté enfermo y llame a su equipo médico si no mejora.",
+"You told us you prefer cycling, and cycling is a good fit for you, so we're recommending a cycling session.": "Nos dijo que prefiere la bicicleta, y le va bien, así que le recomendamos un paseo en bicicleta.",
+"You told us you prefer walking, and walking is a good fit for you, so we're recommending a walking session.": "Nos dijo que prefiere caminar, y caminar le va bien, así que le recomendamos una caminata.",
+"You're back at your start": "Volvió a su punto de partida",
+"You're back where you started. Well done! Tap Finish.": "Volvió al punto de partida. ¡Muy bien! Toque Terminar.",
+"You're halfway. Keep following the green line. It brings you back to your start.": "Va por la mitad. Siga la línea verde. Le lleva de vuelta a su salida.",
+"You've finished your last walks comfortably, so we've added a few minutes.": "Terminó sus últimas caminatas con comodidad, así que agregamos unos minutos.",
+"You've reached the turning point. Go back the way you came to your start.": "Llegó al punto de regreso. Vuelva por donde vino hasta su salida.",
+"Your activity preferences and abilities help shape your recommendations.": "Sus preferencias y capacidades ayudan a definir sus recomendaciones.",
+"Your blood sugar is high, so keep today's session short and gentle, drink water before and after, and stop if you feel unwell.": "Su azúcar está alta, así que haga una sesión corta y suave, tome agua antes y después, y deténgase si se siente mal.",
+"Your blood sugar is higher than ideal. Drink water and check again in a couple of hours.": "Su azúcar está más alta de lo ideal. Tome agua y mídala otra vez en un par de horas.",
+"Your blood sugar is in a good range after your activity.": "Su azúcar está en buen rango después de su actividad.",
+"Your blood sugar is in a good range for activity this morning.": "Su azúcar está en buen rango para hacer actividad esta mañana.",
+"Your blood sugar is low. Take 15 g of fast sugar now (half a glass of juice or 3-4 glucose tablets), sit down, and recheck in 15 minutes.": "Su azúcar está baja. Tome ahora 15 g de azúcar rápida (medio vaso de jugo o 3-4 tabletas de glucosa), siéntese y mídala otra vez en 15 minutos.",
+"Your blood sugar is low. Treat it first with 15 g of fast sugar (such as half a glass of juice or 3-4 glucose tablets), recheck after 15 minutes, and check in again once it is back in range.": "Su azúcar está baja. Trátela primero con 15 g de azúcar rápida (medio vaso de jugo o 3-4 tabletas de glucosa), mida otra vez en 15 minutos y vuelva a registrarse cuando esté en rango.",
+"Your blood sugar is on the low side after exercise. Have a small snack and check again in an hour.": "Su azúcar quedó algo baja después del ejercicio. Coma algo ligero y mídala otra vez en una hora.",
+"Your blood sugar is on the low side for exercise: have a small carbohydrate snack before you start and carry fast sugar with you.": "Su azúcar está algo baja para hacer ejercicio: coma algo con carbohidratos antes de empezar y lleve azúcar rápida.",
+"Your blood sugar is very high for exercise right now. Drink water, take your usual medication as prescribed, and check in again when it has come down. Contact your care team if it stays this high.": "Su azúcar está muy alta para hacer ejercicio ahora. Tome agua, tome su medicina como se la recetaron y vuelva a registrarse cuando baje. Llame a su equipo médico si sigue así de alta.",
+"Your blood sugar is very high. Drink water, and contact your care team if it stays this high.": "Su azúcar está muy alta. Tome agua y llame a su equipo médico si sigue así de alta.",
+"Your completed activities, time outside, and small wins along the way.": "Sus actividades, su tiempo al aire libre y sus pequeños logros.",
+"Your current profile does not support a walking or cycling recommendation. Review your abilities before continuing.": "Su perfil actual no permite recomendar caminar ni bicicleta. Revise sus capacidades antes de seguir.",
+"Your health details are encrypted and only used to plan your walks.": "Sus datos de salud están cifrados y solo se usan para planear sus caminatas.",
+"Your last session ended early, so we're keeping today's the same length.": "Su última sesión terminó antes, así que la de hoy dura lo mismo.",
+"Your last walk felt hard, so today's is a little shorter.": "Su última caminata se sintió difícil, así que la de hoy es un poco más corta.",
+"Your location": "Su ubicación",
+"Your password": "Su contraseña",
+"Your position is unavailable right now. Tap the map instead.": "Su ubicación no está disponible ahora. Toque el mapa.",
+"Your progress": "Su progreso",
+"Your ride": "Su paseo en bici",
+"Your route": "Su ruta",
+"Your route options": "Sus opciones de ruta",
+"Your walk": "Su caminata",
+"abandoned": "terminada antes",
+"active minutes in all": "minutos activos en total",
+"activities done": "actividades hechas",
+"activity done": "actividad hecha",
+"before and after your walks, on average.": "antes y después de sus caminatas, en promedio.",
+"calories": "calorías",
+"calories burned (estimate)": "calorías quemadas (estimado)",
+"completed": "terminada",
+"distance covered": "distancia recorrida",
+"e.g. 110": "p. ej. 110",
+"e.g. 115": "p. ej. 115",
+"felt easy": "se sintió fácil",
+"felt hard": "se sintió difícil",
+"felt just right": "se sintió bien",
+"match": "afinidad",
+"miles": "millas",
+"of goal": "de la meta",
+"of started routes finished": "de las rutas empezadas, terminadas",
+"person + place": "persona + lugar",
+"round trip from where you are": "ida y vuelta desde donde está",
+"selected": "elegida",
+"time": "tiempo",
+"you@example.com": "usted@ejemplo.com",
+"✓ Walk saved to your progress": "✓ Caminata guardada en su progreso"
+};
+const ES_FRAGMENTS = {
+"avoids complex intersections": "evita intersecciones complicadas",
+"avoids heavy traffic exposure": "evita el tráfico pesado",
+"avoids high-stress traffic": "evita el tráfico estresante",
+"avoids major road crossings": "evita cruces de calles grandes",
+"avoids steps and stairs": "evita escalones y escaleras",
+"closely matches your target session length": "se ajusta bien a la duración de su sesión",
+"crosses a few complex intersections": "cruza algunas intersecciones complicadas",
+"feels like a safe, well-used route": "es una ruta segura y concurrida",
+"has a few interruptions in the path": "tiene algunas interrupciones en el camino",
+"has a lower safety score than the other options": "es menos segura que las otras opciones",
+"has a smooth, continuous path with few interruptions": "tiene un camino continuo con pocas interrupciones",
+"has good sidewalk coverage": "tiene buenas aceras",
+"has limited bike lane coverage": "tiene pocos carriles de bici",
+"has limited sidewalk coverage in places": "tiene pocas aceras en algunas partes",
+"has some noticeable hills": "tiene algunas cuestas notables",
+"includes steps beyond what you told us you can manage": "tiene más escalones de los que nos dijo que puede subir",
+"involves a few major road crossings": "cruza algunas calles grandes",
+"involves higher-stress traffic segments": "pasa por tramos de tráfico estresante",
+"is on a road where cycling is not allowed": "va por una calle donde no se permite la bicicleta",
+"is on a road where walking is not allowed": "va por una calle donde no se permite caminar",
+"is steeper than suits you": "es más empinada de lo que le conviene",
+"runs along a fast road with no sidewalk": "va por una calle rápida sin acera",
+"runs alongside busier traffic than ideal": "pasa junto a más tráfico de lo ideal",
+"stays mostly on streets rather than paths or green space": "va más por calles que por senderos o áreas verdes",
+"stays on marked bike lanes": "va por carriles de bici marcados",
+"stays relatively flat": "es bastante plana",
+"uses a fast road with no bike lane": "usa una calle rápida sin carril de bici",
+"uses paths, trails or green space": "usa senderos o áreas verdes"
+};
+const esFragments = (list) => list.split(" and ").map((part) => ES_FRAGMENTS[part] || part).join(" y ");
+const ES_PATTERNS = [
+  [/^(\d+) more active minutes reaches this week's goal\.$/, "Faltan $1 minutos activos para la meta de esta semana."],
+  [/^1 day in a row$/, "1 día seguido"], [/^(\d+) days in a row$/, "$1 días seguidos"],
+  [/^of (\d+) min$/, "de $1 min"], [/^(\d+) of (\d+) minutes this week$/, "$1 de $2 minutos esta semana"],
+  [/^([\d.]+) of ([\d.]+)( mi| min)?$/, "$1 de $2$3"], [/^([\d.]+) of ([\d.]+) days$/, "$1 de $2 días"],
+  [/^(\d+) minutes$/, "$1 minutos"], [/^Recheck in (\d+:\d\d)$/, "Mida otra vez en $1"],
+  [/^(\d+) routes scored for you\.$/, "$1 rutas evaluadas para usted."],
+  [/^Located you to about (\d+) m\.$/, "Le ubicamos con unos $1 m de precisión."],
+  [/^You chose (\d+) minutes today \(we suggested (\d+)\)\.$/, "Eligió $1 minutos hoy (sugerimos $2)."],
+  [/^Sidewalks (\d+%)$/, "Aceras $1"], [/^Busy roads (\d+%)$/, "Tráfico $1"], [/^Bike lanes (\d+%)$/, "Carril bici $1"],
+  [/^(\d+) mg\/dL lower$/, "$1 mg/dL más baja"], [/^(\d+) mg\/dL higher$/, "$1 mg/dL más alta"],
+  [/^on average after a walk \(1 walk\)$/, "en promedio después de caminar (1 caminata)"],
+  [/^on average after a walk \((\d+) walks\)$/, "en promedio después de caminar ($1 caminatas)"],
+  [/^on average after a walk\. Talk with your care team if this keeps happening\.$/, "en promedio después de caminar. Hable con su equipo médico si sigue pasando."],
+  [/^Done (\d+) times, last (.+)$/, "Hecha $1 veces, la última el $2"], [/^Last done (.+)$/, "Última vez: $1"],
+  [/^Your walk has started$/, "Su caminata empezó"], [/^Your ride has started$/, "Su paseo empezó"],
+  [/^Well done! Tap Finish to save your walk\.$/, "¡Muy bien! Toque Terminar para guardar su caminata."],
+  [/^Well done! Tap Finish to save your ride\.$/, "¡Muy bien! Toque Terminar para guardar su paseo."],
+  [/^Call (.+)$/, "Llamar a $1"],
+  [/^(.+): (-?[\d.]+, -?[\d.]+) \(accurate to ~(\d+) m\)$/, (m, label, where, metres) => (trOne(label) || label) + ": " + where + " (precisión de ~" + metres + " m)"],
+  [/^This route scores well because it ([^.]+)\.$/, (m, list) => "Esta ruta puntúa bien porque " + esFragments(list) + "."],
+  [/^One tradeoff: it ([^.]+)\.$/, (m, part) => "Una desventaja: " + esFragments(part) + "."],
+  [/^is not shown: it ([^.]+)\.$/, (m, part) => "no se muestra: " + esFragments(part) + "."],
+  [/^That route (.+), so it is not offered to you$/, (m, part) => "Esa ruta " + esFragments(part) + ", así que no se le ofrece"],
+];
+let lang = "en";
+
+function trOne(text) {
+  if (Object.prototype.hasOwnProperty.call(ES, text)) return ES[text];
+  for (const [pattern, out] of ES_PATTERNS) {
+    if (pattern.test(text)) return text.replace(pattern, out);
+  }
+  return null;
+}
+
+// English -> the current language. Whole text first, then " · " parts, then
+// sentence by sentence (server advice arrives as several sentences).
+function tr(text) {
+  if (lang !== "es" || typeof text !== "string") return text;
+  const lead = text.match(/^\s*/)[0], trail = text.match(/\s*$/)[0];
+  const core = text.trim().replace(/\s+/g, " ");  // source HTML wraps long lines
+  if (!core || !/[A-Za-z]/.test(core)) return text;
+  let out = trOne(core);
+  if (out === null && core.indexOf(" · ") !== -1) {
+    const parts = core.split(" · ").map((part) => trOne(part));
+    if (parts.some((part) => part !== null)) out = core.split(" · ").map((part, i) => parts[i] === null ? part : parts[i]).join(" · ");
+  }
+  if (out === null) {
+    const sentences = core.split(/(?<=[.!?])\s+/);
+    if (sentences.length > 1) {
+      const done = sentences.map((sentence) => trOne(sentence));
+      if (done.some((sentence) => sentence !== null)) out = sentences.map((sentence, i) => done[i] === null ? sentence : done[i]).join(" ");
+    }
+  }
+  return out === null ? text : lead + out + trail;
+}
+
+function uiLocale() { return lang === "es" ? "es-US" : "en-US"; }
+
+// Each text node and attribute remembers its English, so switching back
+// restores it exactly, and new text is translated as it appears.
+const englishText = new WeakMap(), shownText = new WeakMap();
+const I18N_ATTRS = ["placeholder", "aria-label", "title"];
+function translateTextNode(node) {
+  const parent = node.parentNode;
+  if (parent && /^(SCRIPT|STYLE)$/.test(parent.nodeName)) return;
+  const current = node.nodeValue;
+  if (shownText.get(node) !== current) englishText.set(node, current);  // new English text
+  const out = tr(englishText.get(node));
+  shownText.set(node, out);
+  if (out !== current) node.nodeValue = out;
+}
+function translateAttrs(element) {
+  for (const attr of I18N_ATTRS) {
+    if (!element.hasAttribute || !element.hasAttribute(attr)) continue;
+    const key = "data-en-" + attr, value = element.getAttribute(attr);
+    if (element.getAttribute("data-shown-" + attr) !== value) element.setAttribute(key, value);
+    const out = tr(element.getAttribute(key));
+    element.setAttribute("data-shown-" + attr, out);
+    if (out !== value) element.setAttribute(attr, out);
+  }
+}
+function translateTree(root) {
+  if (!root || typeof document.createTreeWalker !== "function") return;
+  if (root.nodeType === 3) { translateTextNode(root); return; }
+  if (root.nodeType !== 1 && root.nodeType !== 9) return;
+  if (root.nodeType === 1) translateAttrs(root);
+  const walker = document.createTreeWalker(root, 5 /* elements and text */);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeType === 3) translateTextNode(node); else translateAttrs(node);
+  }
+}
+let i18nObserver = null;
+function watchForText() {
+  if (i18nObserver || typeof MutationObserver === "undefined") return;
+  i18nObserver = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === "characterData") translateTextNode(record.target);
+      else if (record.type === "attributes") translateAttrs(record.target);
+      else record.addedNodes.forEach((node) => translateTree(node));
+    }
+  });
+  i18nObserver.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: I18N_ATTRS });
+}
+
+function applyLanguage(choice) {
+  lang = choice === "es" ? "es" : "en";
+  document.documentElement.setAttribute("lang", lang);
+  translateTree(document.body);
+  if (lang === "es") watchForText();
+  document.querySelectorAll("[data-lang-choice]").forEach((button) =>
+    button.setAttribute("aria-pressed", String(button.dataset.langChoice === lang)));
+  try { localStorage.setItem("fitwaze-lang", lang); } catch (error) { /* private mode */ }
+  if (typeof renderGreeting === "function") renderGreeting();
+  if (accessToken) refreshProgress();
+}
+function savedLanguage() {
+  try {
+    const saved = localStorage.getItem("fitwaze-lang");
+    if (saved) return saved;
+  } catch (error) { /* private mode */ }
+  return /^es\b/i.test((navigator && navigator.language) || "") ? "es" : "en";
 }
 
 // --- Signing in ---------------------------------------------------------------
@@ -2276,7 +2873,7 @@ async function loadPastRoutes(context, version) {
   pastContext = {...context, routes: past};
   const noun = recommendation && recommendation.activity_type === "cycle" ? "ride" : "walk";
   el("past-out").innerHTML = "<h3>Or " + noun + " one you've done before</h3>" + past.map((route) => {
-    const last = new Date(route.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const last = new Date(route.completed_at).toLocaleDateString(uiLocale(), { month: "short", day: "numeric" });
     const felt = { easy: "felt easy", just_right: "felt just right", hard: "felt hard" }[route.effort] || "";
     return '<div class="past-route">' + routeThumb(route.geometry) +
       '<div class="past-info"><b>' + distanceText(route.distance_m) + " " + UNIT + " · " + esc(route.estimated_minutes) + " min</b>" +
@@ -2500,7 +3097,8 @@ function speak(text) {
   try {
     if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(tr(text));
+    utterance.lang = lang === "es" ? "es-US" : "en-US";
     utterance.rate = 0.95;
     window.speechSynthesis.speak(utterance);
   } catch (error) { /* no voice available */ }
@@ -2513,7 +3111,7 @@ function journeyAlert(kind, title, text) {
   el("journey-alert").hidden = false;
   playTones(TONES[kind] || TONES.start);
   try { if (soundOn && navigator.vibrate) navigator.vibrate(BUZZ[kind] || BUZZ.start); } catch (error) {}
-  speak(title + ". " + text);
+  speak(tr(title) + ". " + tr(text));
   notifyIfAway(title, text);
   clearTimeout(alertTimer);
   alertTimer = setTimeout(() => { el("journey-alert").hidden = true; }, kind === "start" ? 5000 : 9000);
@@ -2565,12 +3163,17 @@ function returnByText(minutes) {
   // The planned time plus a little slack, rounded up to the next 5 minutes.
   const back = new Date(Date.now() + (minutes + 10) * 60000);
   back.setMinutes(Math.ceil(back.getMinutes() / 5) * 5, 0, 0);
-  return back.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return back.toLocaleTimeString(uiLocale(), { hour: "numeric", minute: "2-digit" });
 }
 
 function tellSomeoneMessage() {
   const start = session.route_geometry && session.route_geometry[0];
-  const where = start ? " Start: https://maps.google.com/?q=" + start[0].toFixed(5) + "," + start[1].toFixed(5) : "";
+  const where = start ? (lang === "es" ? " Salida: " : " Start: ") + "https://maps.google.com/?q=" + start[0].toFixed(5) + "," + start[1].toFixed(5) : "";
+  if (lang === "es") {
+    return "Voy a " + (activityWord() === "ride" ? "andar en bicicleta" : "caminar") + " " + session.estimated_minutes +
+      " minutos (circuito de " + distanceText(session.distance_m) + " " + UNIT + "). Debo volver a las " +
+      returnByText(session.estimated_minutes) + ". Si no sabe de mí, por favor búsqueme." + where;
+  }
   return "I'm going for a " + session.estimated_minutes + "-minute " + activityWord() + " (" +
     distanceText(session.distance_m) + " " + UNIT + " loop). I should be back by " +
     returnByText(session.estimated_minutes) + ". If you don't hear from me, please check on me." + where;
@@ -3216,7 +3819,7 @@ function recentList(sessions) {
   return '<div class="step-label">Recent activity</div><div class="list-group">' + done.map((item) => {
     const when = new Date(item.completed_at || item.created_at);
     let day = "";
-    try { day = when.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); } catch (error) {}
+    try { day = when.toLocaleDateString(uiLocale(), { weekday: "short", month: "short", day: "numeric" }); } catch (error) {}
     return '<div class="list-row"><span class="list-icon">' + (item.activity_type === "cycle" ? "🚲" : "🚶") + "</span>" +
       "<span class=\"list-main\"><b>" + (item.activity_type === "cycle" ? "Ride" : "Walk") + "</b><small>" + esc(day) + "</small></span>" +
       "<span class=\"list-value\">" + esc(item.estimated_minutes) + " min · " + distanceText(item.distance_m) + " " + UNIT +
@@ -3242,7 +3845,7 @@ function glucoseCard(walks, averageChange) {
   const y = (v) => top + (high - v) / (high - low) * (H - top - bottom);
   const step = (W - left - right) / walks.length;
   const x = (i) => left + step * (i + 0.5);
-  const day = (w) => new Date(w.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const day = (w) => new Date(w.completed_at).toLocaleDateString(uiLocale(), { month: "short", day: "numeric" });
   const ticks = [];
   for (let v = low; v <= high; v += 40) ticks.push(v);
   let svg = '<svg class="glucose-chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Blood sugar before and after each walk">' +
@@ -3356,7 +3959,7 @@ function renderGreeting(now = new Date()) {
   const hour = now.getHours();
   el("today-greeting").textContent = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   try {
-    el("today-date").textContent = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    el("today-date").textContent = now.toLocaleDateString(uiLocale(), { weekday: "long", month: "long", day: "numeric" });
   } catch (error) { el("today-date").textContent = "Today"; }
 }
 renderGreeting();
@@ -3402,6 +4005,10 @@ document.querySelectorAll("[data-theme-choice]").forEach((button) => {
   button.onclick = () => applyTheme(button.dataset.themeChoice);
 });
 applyTheme(savedTheme());
+document.querySelectorAll("[data-lang-choice]").forEach((button) => {
+  button.onclick = () => applyLanguage(button.dataset.langChoice);
+});
+applyLanguage(savedLanguage());
 if (/^https?:$/.test((window.location && window.location.protocol) || "")) resumeSignIn();
 </script>
 </body>

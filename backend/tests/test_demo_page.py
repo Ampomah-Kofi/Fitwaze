@@ -28,8 +28,8 @@ def test_demo_page_does_not_persist_credentials_in_the_browser(client):
     page = client.get("/demo").text
     for persistent_store in ("sessionStorage.setItem", "document.cookie =", "localStorage["):
         assert persistent_store not in page
-    # The one thing kept on the device is the Light/Dark choice.
-    assert re.findall(r"localStorage\.setItem\(([^,]*),", page) == ['"fitwaze-theme"']
+    # All that is kept on the device: the Light/Dark and language choices.
+    assert sorted(re.findall(r"localStorage\.setItem\(([^,]*),", page)) == ['"fitwaze-lang"', '"fitwaze-theme"']
 
 
 def test_demo_page_is_served_in_the_hosted_pilot(client, monkeypatch):

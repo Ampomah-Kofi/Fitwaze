@@ -615,3 +615,28 @@ test('achievements show what is earned and how close the rest are', () => {
   assert.match(html, /3 of 10 mi/);
   assert.match(html, /width:34%/);
 });
+
+test('Spanish covers whole phrases, numbers, route explanations and server advice', () => {
+  const app = setup();
+  app.run(`lang = 'es';`);
+  assert.equal(app.run(`tr('Find my routes')`), 'Buscar mis rutas');
+  assert.equal(app.run(`tr('3 of 10 mi')`), '3 de 10 mi');
+  assert.equal(app.run(`tr('84 more active minutes reaches this week\\'s goal.')`), 'Faltan 84 minutos activos para la meta de esta semana.');
+  assert.equal(app.run(`tr('This route scores well because it has good sidewalk coverage and avoids heavy traffic exposure. One tradeoff: it has some noticeable hills.')`),
+    'Esta ruta puntúa bien porque tiene buenas aceras y evita el tráfico pesado. Una desventaja: tiene algunas cuestas notables.');
+  assert.equal(app.run(`tr('Your blood sugar is in a good range after your activity. Well done for getting out today.')`),
+    'Su azúcar está en buen rango después de su actividad. Muy bien por salir hoy.');
+  assert.equal(app.run(`tr('Walk · 12 minutes · round trip from where you are')`), 'Caminar · 12 minutos · ida y vuelta desde donde está');
+  assert.equal(app.run(`tr('Something we never listed')`), 'Something we never listed');
+  app.run(`lang = 'en';`);
+  assert.equal(app.run(`tr('Find my routes')`), 'Find my routes');
+});
+
+test('the check-in text to a contact is written in Spanish when Spanish is on', async () => {
+  const app = setup();
+  app.run(`lang = 'es'; savedProfile = {emergency_contact_phone: '2055550142'};
+    session = {id: 's1', status: 'selected', estimated_minutes: 20, distance_m: 1609, route_geometry: [[33.5, -86.8]]};
+    window.location.href = '';`);
+  await app.nodes.get('btn-tell').onclick();
+  assert.match(decodeURIComponent(app.run('window.location.href')), /Voy a caminar 20 minutos/);
+});
