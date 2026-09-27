@@ -12,7 +12,11 @@ from datetime import date, datetime, timedelta, timezone
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import csv
+import io
+
 from fastapi import APIRouter, Depends, Header
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -69,6 +73,53 @@ def _current_streak_days(completed_dates: set[date], today: date) -> int:
         streak += 1
         cursor -= timedelta(days=1)
     return streak
+
+
+MG_DL_PER_MMOL_L = 18.0
+
+
+@router.get("/export.csv")
+def export_activity_csv(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_timezone: str | None = Header(default=None),
+) -> Response:
+    """The caller's own finished activities as a spreadsheet, to share with
+    their care team: date, activity, minutes, miles, calories, how it felt
+    and blood sugar afterwards. Only their own rows; never anyone else's."""
+    zone = _zone(x_timezone)
+    profile = db.get(HealthProfile, current_user.id)
+    weight_kg = float(profile.weight_kg) if profile is not None else None
+    rows = db.scalars(
+        select(ActivitySession)
+        .where(ActivitySession.user_id == current_user.id)
+        .where(ActivitySession.status == SessionStatusEnum.completed)
+        .order_by(ActivitySession.completed_at.desc())
+    )
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["Date", "Activity", "Minutes", "Miles", "Calories (estimate)", "Measured by GPS",
+                     "How it felt", "Blood sugar after (mg/dL)"])
+    for s in rows:
+        minutes = s.measured_minutes if s.measured_minutes is not None else s.estimated_minutes
+        metres = s.measured_distance_m if s.measured_distance_m is not None else s.distance_m
+        activity = s.activity_recommendation.activity_type
+        glucose = s.post_glucose_mmol_l
+        writer.writerow([
+            _as_utc(s.completed_at).astimezone(zone).strftime("%Y-%m-%d %H:%M") if s.completed_at else "",
+            "Ride" if activity.value == "cycle" else "Walk",
+            round(minutes),
+            f"{metres / 1609.344:.2f}",
+            estimate_calories(activity, minutes, weight_kg, metres) or "",
+            "yes" if s.measured_minutes is not None else "no",
+            (s.effort or "").replace("_", " "),
+            round(float(glucose) * MG_DL_PER_MMOL_L) if glucose else "",
+        ])
+    logger.info("activity_export user_id=%s", current_user.id)
+    return Response(
+        content=out.getvalue(), media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="fitwaze-activity.csv"', "Cache-Control": "no-store"},
+    )
 
 
 @router.get("", response_model=ProgressResponse)

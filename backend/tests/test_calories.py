@@ -63,3 +63,27 @@ def test_implausible_measurements_are_rejected(client):
     from app.schemas.route import RouteSessionUpdateRequest
     with pytest.raises(ValueError):
         RouteSessionUpdateRequest(status="completed", measured_minutes=-3)
+
+
+def test_care_team_export_is_the_callers_own_activity(client):
+    import csv, io
+    headers = auth_headers(register_and_login(client)["access_token"])
+    client.put("/profile", json=valid_profile_payload(weight_kg=80), headers=headers)
+    rec = client.post("/activity/recommendation", headers=headers).json()
+    start = {"activity_recommendation_id": rec["id"], "latitude": 33.5186, "longitude": -86.8104}
+    option = client.post("/route/options", json=start, headers=headers).json()["options"][0]
+    session = client.post("/route/select", json={**start, "candidate_label": option["label"],
+                                                 "candidate_revision": option["candidate_revision"]}, headers=headers).json()
+    client.patch(f"/route/sessions/{session['id']}", headers=headers, json={
+        "status": "completed", "effort": "just_right", "post_glucose_value": 126, "post_glucose_unit": "mg/dL",
+        "measured_minutes": 22, "measured_distance_m": 1800})
+    response = client.get("/progress/export.csv", headers={**headers, "X-Timezone": "America/Chicago"})
+    assert response.status_code == 200 and response.headers["content-type"].startswith("text/csv")
+    rows = list(csv.reader(io.StringIO(response.text)))
+    assert rows[0][0] == "Date" and len(rows) == 2
+    assert rows[1][1:4] == ["Walk", "22", "1.12"]
+    assert rows[1][5:] == ["yes", "just right", "126"]
+
+    other = auth_headers(register_and_login(client)["access_token"])
+    assert len(list(csv.reader(io.StringIO(client.get("/progress/export.csv", headers=other).text)))) == 1
+    assert client.get("/progress/export.csv").status_code == 401

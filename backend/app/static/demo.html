@@ -1073,6 +1073,9 @@
       <div id="progress-out" class="stats"></div>
       <div id="recent-out"></div>
       <div id="simulation-progress" class="card" hidden></div>
+      <button id="btn-export" class="ghost" style="margin-top:12px">Share with my care team</button>
+      <p class="note">Downloads a spreadsheet of your walks and rides (date, minutes, miles, calories, how it felt,
+        blood sugar afterwards) that you can email or show to your doctor or nurse.</p>
       <button id="btn-progress" class="quiet" style="margin-top:12px">Refresh</button>
       <p class="note">Map data &copy; OpenStreetMap contributors.</p>
     </section>
@@ -2705,6 +2708,32 @@ async function refreshProgress() {
 }
 
 el("btn-progress").onclick = busy(el("btn-progress"), refreshProgress);
+
+el("btn-export").onclick = busy(el("btn-export"), async () => {
+  try {
+    // Fetched rather than linked, because the endpoint needs the sign-in token.
+    const response = await authenticatedFetch("/progress/export.csv");
+    if (!response.ok) throw new Error("Could not prepare the file (" + response.status + ").");
+    const blob = await response.blob();
+    const file = new File([blob], "fitwaze-activity.csv", { type: "text/csv" });
+    // On phones, open the share sheet (Mail, Messages, Files...); else download.
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "My FitWaze activity" });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "fitwaze-activity.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    if (error && error.name === "AbortError") return; // closed the share sheet
+    toast(error.message, true);
+  }
+});
 
 // --- Greeting ------------------------------------------------------------------
 function renderGreeting(now = new Date()) {
