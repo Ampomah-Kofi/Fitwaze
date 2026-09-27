@@ -84,6 +84,9 @@ def create_activity_recommendation(
         duration_minutes=result.duration_minutes,
         rationale=result.rationale,
     )
+    reading = payload.checkin.glucose_mmol_l if payload and payload.checkin else None
+    if reading is not None:
+        record.pre_glucose_mmol_l = f"{reading:.2f}"
     db.add(record)
     db.commit()
     db.refresh(record)

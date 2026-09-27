@@ -26,7 +26,7 @@ from app.engines.calories import estimate_calories
 from app.models.profile import HealthProfile
 from app.models.session import ActivitySession
 from app.models.user import User
-from app.schemas.progress import ProgressResponse, ProgressSessionSummary
+from app.schemas.progress import GlucoseWalk, ProgressResponse, ProgressSessionSummary
 from app.security.deps import get_current_user
 
 router = APIRouter(prefix="/progress", tags=["progress"])
@@ -76,6 +76,24 @@ def _current_streak_days(completed_dates: set[date], today: date) -> int:
 
 
 MG_DL_PER_MMOL_L = 18.0
+# A morning reading only describes "before the walk" if the walk followed
+# soon after; a reading from breakfast says little about a walk at dinner.
+BEFORE_READING_MAX_AGE = timedelta(hours=4)
+GLUCOSE_WALK_LIMIT = 10
+
+
+def _mg_dl(stored: str | None) -> int | None:
+    return round(float(stored) * MG_DL_PER_MMOL_L) if stored else None
+
+
+def _before_reading(s: ActivitySession) -> int | None:
+    """The check-in reading taken shortly before this walk, in mg/dL."""
+    recommendation = s.activity_recommendation
+    if not recommendation.pre_glucose_mmol_l or s.completed_at is None:
+        return None
+    if _as_utc(s.completed_at) - _as_utc(recommendation.created_at) > BEFORE_READING_MAX_AGE:
+        return None
+    return _mg_dl(recommendation.pre_glucose_mmol_l)
 
 
 @router.get("/export.csv")
@@ -99,12 +117,11 @@ def export_activity_csv(
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(["Date", "Activity", "Minutes", "Miles", "Calories (estimate)", "Measured by GPS",
-                     "How it felt", "Blood sugar after (mg/dL)"])
+                     "How it felt", "Blood sugar before (mg/dL)", "Blood sugar after (mg/dL)"])
     for s in rows:
         minutes = s.measured_minutes if s.measured_minutes is not None else s.estimated_minutes
         metres = s.measured_distance_m if s.measured_distance_m is not None else s.distance_m
         activity = s.activity_recommendation.activity_type
-        glucose = s.post_glucose_mmol_l
         writer.writerow([
             _as_utc(s.completed_at).astimezone(zone).strftime("%Y-%m-%d %H:%M") if s.completed_at else "",
             "Ride" if activity.value == "cycle" else "Walk",
@@ -113,7 +130,8 @@ def export_activity_csv(
             estimate_calories(activity, minutes, weight_kg, metres) or "",
             "yes" if s.measured_minutes is not None else "no",
             (s.effort or "").replace("_", " "),
-            round(float(glucose) * MG_DL_PER_MMOL_L) if glucose else "",
+            _before_reading(s) or "",
+            _mg_dl(s.post_glucose_mmol_l) or "",
         ])
     logger.info("activity_export user_id=%s", current_user.id)
     return Response(
@@ -173,6 +191,17 @@ def get_progress(
         return estimate_calories(s.activity_recommendation.activity_type, minutes(s), weight_kg, metres(s))
 
     burned = [calories(s) for s in completed]
+
+    glucose_walks = []
+    for s in sorted(completed, key=lambda s: completed_at_utc.get(s.id) or now):
+        before, after = _before_reading(s), _mg_dl(s.post_glucose_mmol_l)
+        if before is not None and after is not None:
+            glucose_walks.append(GlucoseWalk(session_id=s.id, completed_at=s.completed_at,
+                                             activity_type=s.activity_recommendation.activity_type,
+                                             before_mg_dl=before, after_mg_dl=after))
+    glucose_walks = glucose_walks[-GLUCOSE_WALK_LIMIT:]  # the latest, oldest first
+    average_change = (round(sum(w.after_mg_dl - w.before_mg_dl for w in glucose_walks) / len(glucose_walks))
+                      if glucose_walks else None)
     total = len(sessions)
     return ProgressResponse(
         sessions_selected=total,
@@ -198,4 +227,6 @@ def get_progress(
             )
             for s in sessions[:RECENT_SESSION_LIMIT]
         ],
+        glucose_walks=glucose_walks,
+        average_glucose_change_mg_dl=average_change,
     )

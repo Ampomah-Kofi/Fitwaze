@@ -30,6 +30,15 @@ class ProgressSessionSummary(BaseModel):
     measured: bool = False
 
 
+class GlucoseWalk(BaseModel):
+    """Blood sugar at the morning check-in and after the walk that followed."""
+    session_id: uuid.UUID
+    completed_at: datetime
+    activity_type: ActivityTypeEnum
+    before_mg_dl: int
+    after_mg_dl: int
+
+
 class ProgressResponse(BaseModel):
     sessions_selected: int
     sessions_completed: int
@@ -41,3 +50,7 @@ class ProgressResponse(BaseModel):
     current_streak_days: int
     total_calories: int | None = None
     recent_sessions: list[ProgressSessionSummary]
+    # Walks with a reading before and after, oldest first (the latest few).
+    glucose_walks: list[GlucoseWalk] = []
+    # Average of (after - before) over glucose_walks; negative means lower.
+    average_glucose_change_mg_dl: int | None = None

@@ -82,7 +82,7 @@ def test_care_team_export_is_the_callers_own_activity(client):
     rows = list(csv.reader(io.StringIO(response.text)))
     assert rows[0][0] == "Date" and len(rows) == 2
     assert rows[1][1:4] == ["Walk", "22", "1.12"]
-    assert rows[1][5:] == ["yes", "just right", "126"]
+    assert rows[1][5:] == ["yes", "just right", "", "126"]
 
     other = auth_headers(register_and_login(client)["access_token"])
     assert len(list(csv.reader(io.StringIO(client.get("/progress/export.csv", headers=other).text)))) == 1

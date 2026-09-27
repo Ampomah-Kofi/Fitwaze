@@ -17,8 +17,9 @@ class DailyCheckIn(BaseModel):
     """How the person is today, entered when they wake up.
 
     The saved profile says who someone is; this says how they are this
-    morning. It is used for one recommendation and is not stored: only the
-    template rationale it produced is persisted with the recommendation.
+    morning. It shapes one recommendation. Only the blood sugar reading is
+    kept (encrypted, with the recommendation) so the person can compare it
+    with their reading after the walk; the rest is not stored.
     """
 
     # Optional: not everyone owns a meter, and a check-in without a reading

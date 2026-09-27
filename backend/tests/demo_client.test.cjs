@@ -543,3 +543,16 @@ test('signing out ends the server session and returns to sign-in', async () => {
   assert.equal(app.nodes.get('btn-signout-top').hidden, true);
   assert(app.nodes.get('screen-auth').classList.contains('active'));
 });
+
+test('progress shows blood sugar before and after walks, with a list view', () => {
+  const app = setup();
+  const walks = [
+    {completed_at: '2026-09-26T13:00:00Z', before_mg_dl: 160, after_mg_dl: 121},
+    {completed_at: '2026-09-27T13:00:00Z', before_mg_dl: 140, after_mg_dl: 119},
+  ];
+  const html = app.run(`glucoseCard(${JSON.stringify(walks)}, -30)`);
+  assert.match(html, /30 mg\/dL lower/);
+  assert.equal((html.match(/class="gc-before"/g) || []).length, 2);
+  assert.match(html, /<td>160<\/td><td>121<\/td><td>-39<\/td>/);
+  assert.match(app.run(`glucoseCard([], null)`), /morning check-in/);
+});

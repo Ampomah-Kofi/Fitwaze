@@ -785,6 +785,34 @@
   .appbar-signout { margin-left: auto; align-self: center; width: auto; min-height: 32px; padding: 0 12px;
     border: 0; border-radius: 16px; background: var(--fill); color: var(--ink); font-size: 14px; font-weight: 500; }
 
+
+  /* Blood sugar before/after chart on Progress. */
+  .glucose-card h3 { margin: 0 0 10px; font-size: 17px; }
+  .glucose-empty { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+  .glucose-hero { display: flex; flex-direction: column; margin-bottom: 8px; }
+  .glucose-hero b { font-size: 28px; letter-spacing: -.02em; color: var(--ink); }
+  .glucose-hero span { font-size: 14px; color: var(--muted); }
+  .glucose-chart { display: block; width: 100%; height: auto; overflow: visible; --gc-before: #007aff; --gc-after: #248a3d; }
+  .gc-band { fill: rgba(52, 199, 89, .10); }
+  .gc-grid { stroke: var(--line); stroke-width: 1; }
+  .gc-axis { fill: var(--muted); font-size: 10px; }
+  .gc-hit { fill: transparent; }
+  .gc-walk:hover .gc-hit, .gc-walk:focus .gc-hit { fill: var(--fill); }
+  .gc-walk:focus { outline: none; }
+  .gc-stem { stroke: var(--muted); stroke-width: 2; opacity: .6; }
+  .gc-before { fill: var(--card); stroke: var(--gc-before); stroke-width: 2.5; }
+  .gc-after { fill: var(--gc-after); stroke: var(--card); stroke-width: 2; }
+  .gc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
+  .gc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .gc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .gc-key-before { border: 2.5px solid #007aff; box-sizing: border-box; }
+  .gc-key-after { background: #248a3d; }
+  .gc-key-band { border-radius: 3px !important; background: rgba(52, 199, 89, .18); }
+  .gc-table summary { cursor: pointer; font-size: 14px; color: var(--blue, #007aff); margin-top: 6px; }
+  .gc-table table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+  .gc-table th, .gc-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  .gc-table th { color: var(--muted); font-weight: 500; }
+
   /* ======================================================================
      Dark mode, following the phone's setting like Apple's own apps: iOS
      system dark colours. Only tokens change, plus the few places that
@@ -802,6 +830,8 @@
     }
     body { background: #000; }
     button { color: #000; }
+    .glucose-chart { --gc-before: #3b8bf0; --gc-after: #34a853; }
+    .gc-key-before { border-color: #3b8bf0; } .gc-key-after { background: #34a853; }
     .lm-ground { fill: #1c1f1d; } .lm-park { fill: #1f3a24; } .lm-water { fill: #152a3d; }
     .lm-street path, .lm-lane path { stroke: #3a3d3b; } .lm-route-casing { stroke: #0b0d0c; }
     .auth-switch button, .auth-switch button[aria-pressed="true"] { color: #fff; }
@@ -1165,6 +1195,7 @@
       </div>
       <div id="after-walk-out" class="card after-walk" hidden></div>
       <div id="week-ring" class="card ring-card"></div>
+      <div id="glucose-card" class="card glucose-card" hidden></div>
       <div id="progress-out" class="stats"></div>
       <div id="recent-out"></div>
       <div id="simulation-progress" class="card" hidden></div>
@@ -2990,6 +3021,60 @@ function recentList(sessions) {
   }).join("") + "</div>";
 }
 
+// Blood sugar before (morning check-in) and after each walk: one vertical
+// "dumbbell" per walk, the usual target range shaded behind. Before is a
+// hollow blue ring and after a filled green dot, so shape tells them apart
+// as well as colour; a list view carries the same numbers.
+const GLUCOSE_TARGET = [70, 180];
+function glucoseCard(walks, averageChange) {
+  const heading = "<h3>Blood sugar and your walks</h3>";
+  if (!walks.length) {
+    return heading + '<p class="glucose-empty">Enter your blood sugar in the morning check-in, then again when you finish ' +
+      "(“How did that feel?”). After a walk or two you'll see what walking does for your numbers here.</p>";
+  }
+  const values = walks.flatMap((w) => [w.before_mg_dl, w.after_mg_dl]);
+  const low = Math.min(60, Math.floor((Math.min(...values) - 10) / 20) * 20);
+  const high = Math.max(200, Math.ceil((Math.max(...values) + 10) / 20) * 20);
+  const W = 320, H = 170, left = 34, right = 10, top = 10, bottom = 24;
+  const y = (v) => top + (high - v) / (high - low) * (H - top - bottom);
+  const step = (W - left - right) / walks.length;
+  const x = (i) => left + step * (i + 0.5);
+  const day = (w) => new Date(w.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const ticks = [];
+  for (let v = low; v <= high; v += 40) ticks.push(v);
+  let svg = '<svg class="glucose-chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Blood sugar before and after each walk">' +
+    '<rect class="gc-band" x="' + left + '" width="' + (W - left - right) + '" y="' + y(GLUCOSE_TARGET[1]) +
+    '" height="' + (y(GLUCOSE_TARGET[0]) - y(GLUCOSE_TARGET[1])) + '" rx="4"/>' +
+    ticks.map((v) => '<line class="gc-grid" x1="' + left + '" x2="' + (W - right) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>' +
+      '<text class="gc-axis" x="' + (left - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + "</text>").join("");
+  walks.forEach((w, i) => {
+    const label = day(w) + ": " + w.before_mg_dl + " before, " + w.after_mg_dl + " after (mg/dL)";
+    svg += '<g class="gc-walk" tabindex="0"><title>' + esc(label) + "</title>" +
+      '<rect class="gc-hit" x="' + (x(i) - step / 2) + '" y="' + top + '" width="' + step + '" height="' + (H - top - bottom) + '"/>' +
+      '<line class="gc-stem" x1="' + x(i) + '" x2="' + x(i) + '" y1="' + y(w.before_mg_dl) + '" y2="' + y(w.after_mg_dl) + '"/>' +
+      '<circle class="gc-before" cx="' + x(i) + '" cy="' + y(w.before_mg_dl) + '" r="5"/>' +
+      '<circle class="gc-after" cx="' + x(i) + '" cy="' + y(w.after_mg_dl) + '" r="5"/>' +
+      // Every date when there's room; otherwise every other one, ending on the latest.
+      (walks.length <= 6 || (walks.length - 1 - i) % 2 === 0
+        ? '<text class="gc-axis" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(day(w)) + "</text>" : "") +
+      "</g>";
+  });
+  svg += "</svg>";
+  const change = averageChange || 0;
+  const hero = change < 0
+    ? '<div class="glucose-hero"><b>' + Math.abs(change) + ' mg/dL lower</b><span>on average after a walk (' + walks.length + (walks.length === 1 ? " walk" : " walks") + ")</span></div>"
+    : change > 0
+      ? '<div class="glucose-hero"><b>' + change + ' mg/dL higher</b><span>on average after a walk. Talk with your care team if this keeps happening.</span></div>'
+      : '<div class="glucose-hero"><b>About the same</b><span>before and after your walks, on average.</span></div>';
+  const legend = '<div class="gc-legend"><span><i class="gc-key-before"></i>Before (check-in)</span>' +
+    '<span><i class="gc-key-after"></i>After the walk</span><span><i class="gc-key-band"></i>Target 70–180</span></div>';
+  const rows = walks.slice().reverse().map((w) => "<tr><td>" + esc(day(w)) + "</td><td>" + w.before_mg_dl + "</td><td>" +
+    w.after_mg_dl + "</td><td>" + (w.after_mg_dl - w.before_mg_dl > 0 ? "+" : "") + (w.after_mg_dl - w.before_mg_dl) + "</td></tr>").join("");
+  return heading + hero + svg + legend +
+    '<details class="gc-table"><summary>Show as a list</summary><table><thead><tr><th>Day</th><th>Before</th><th>After</th><th>Change</th></tr></thead><tbody>' +
+    rows + "</tbody></table></details>";
+}
+
 async function refreshProgress() {
   if (!accessToken) return;
   try {
@@ -3005,6 +3090,8 @@ async function refreshProgress() {
         ? stat(progress.total_calories.toLocaleString("en-US"), "calories burned (estimate)")
         : stat(Math.round(progress.completion_rate * 100) + "%", "of started routes finished"));
     el("recent-out").innerHTML = recentList(progress.recent_sessions || []);
+    el("glucose-card").innerHTML = glucoseCard(progress.glucose_walks || [], progress.average_glucose_change_mg_dl);
+    el("glucose-card").hidden = false;
   } catch (error) { toast(error.message, true); }
 }
 

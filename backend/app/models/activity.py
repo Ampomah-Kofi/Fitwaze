@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models.enums import ActivityTypeEnum
-from app.models.types import GUID
+from app.models.types import GUID, EncryptedString
 
 
 class ActivityRecommendation(Base):
@@ -27,6 +27,9 @@ class ActivityRecommendation(Base):
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     # Template-generated; must never echo raw stored health field values.
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    # Blood sugar from the morning check-in (mmol/L, encrypted), kept so the
+    # person can see what a walk did to it. None when no reading was given.
+    pre_glucose_mmol_l: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
